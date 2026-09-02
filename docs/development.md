@@ -61,7 +61,7 @@ and `decay._patched_vector_meson_binary`.
 ## Tests
 
 ```
-pytest                  # toolchain-free (CI): 60+ tests, mini-repo fixture
+pytest                  # toolchain-free: 70+ tests, mini-repo fixture
 pytest -m golden        # needs the source repo
 pytest -m parity        # needs ROOT + the PYTHIA samples (~10 min)
 ```

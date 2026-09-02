@@ -117,7 +117,7 @@ Dalitz acceptance, ≲1% on ε. Each one is quantified in the fidelity table in
 ## Tests
 
 ```bash
-pytest                  # toolchain-free suite (runs in CI)
+pytest                  # toolchain-free suite, no source repo needed
 pytest -m golden        # bit-for-bit legacy parity (needs the source repo)
 pytest -m parity        # Python engine vs C++ binaries (needs ROOT + samples)
 ```
