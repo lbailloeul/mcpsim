@@ -1,0 +1,68 @@
+name: SHiP
+family: ship           # selects the legacy flat upsilon acceptance + plot styling
+
+# SHiP at the CERN SPS: 400 GeV protons on the TZM (titanium-zirconium-doped
+# molybdenum) target/dump; a cylindrical mCP detector ~100 m downstream,
+# 0.5 m radius, on-axis. 2e20 POT = 5 nominal years (pbrem paper).
+beam:
+  energy_gev: 400.0
+  frame: fixed_target
+  n_pot: 2.0e20
+
+# Material enters the brem effective luminosity only (four interaction
+# lengths of TZM; grids' headers record rho = 10.2, A = 95.95, L = 15.27 cm).
+target:
+  name: molybdenum
+
+# The acceptance files below were generated FOR THIS GEOMETRY (100 m, 0.5 m).
+# Overriding `detector:` in an inheriting config triggers recomputation by
+# the Python engine — but NOTE: the archived PYTHIA parent samples are
+# 120 GeV, so at 400 GeV the engine refuses and you need fresh samples
+# (`mcpsim generate mesons --engine cpp`, requires PYTHIA).
+detector:
+  type: cylindrical
+  distance_m: 100.0
+  radius_m: 0.5
+  # As for DarkQuest: the cylinder is the acceptance envelope, the detector is
+  # plastic bars, and this length feeds only n_gamma, not the acceptance.
+  bar_length_m: 1.5
+
+# Same detection model as DarkQuest: P = (1 - exp(-n_gamma eps^2))^a eps^2,
+# with n_gamma derived from the plastic anchor (2.5e5 PE at eps = 1 for a 1.5 m
+# bar) -> 2.5e5 here, a = 3 layers, 3.09 events = 95% CL zero-background
+# exclusion.
+sensitivity:
+  scintillator: plastic
+  a: 3
+  n_chi_threshold: 3.09
+  charge_min: 1.0e-5
+  charge_max: 1.0
+  n_charge: 500
+
+channels: [meson_decay, brem, drell_yan]
+
+data:
+  # 257-mass grid ("_copy" is historical naming — a longer variant of the
+  # 199-mass mship_values.txt; nothing physical about the name).
+  mass_grid: mship_values_copy.txt
+  # eVMD brem grids WITH the rho/omega resonances at 400 GeV (canonical);
+  # same double-counting caution vs the PYTHIA vector mesons as DarkQuest.
+  brem_dir: SHiP-brem-backup
+  brem_pattern: "Brem_400GeV_*.txt"
+  # KNOWN INCONSISTENCIES (flagged by the dev-level DY audit, unresolved —
+  # generating cards were not preserved): the files are tagged '_iron'
+  # although this preset's target is molybdenum (iron nPDF approximation or
+  # mislabel), and the pair mixes 'nCTEQ15' / 'nCTEQ' tags. Both files carry
+  # 258 rows and are correctly row-aligned.
+  dy_cross: dy_cross_ship_nCTEQ15_iron.txt
+  dy_ageo: ageo_ship_nCTEQ_iron.txt
+  # Legacy efficiency scans for THIS geometry. The pi0/eta files are the
+  # "-1m-small" run variants, the vector mesons the plain "-SHIP" runs —
+  # historical run names, see docs/data.md. Upsilon: flat 0.011338 via family.
+  acceptance:
+    pi0: total_efficiency_outputdecayPion_SHIP-1m-small.txt
+    eta: total_efficiency_outputdecayEta_SHIP-1m-small.txt
+    rho: total_efficiency_output2bodydecay-rho-SHIP.txt
+    omega: total_efficiency_output2bodydecay-omega-SHIP.txt
+    phi: total_efficiency_output2bodydecay-phi-SHIP.txt
+    jpsi: total_efficiency_output2body_decay-jsi-SHiP.txt

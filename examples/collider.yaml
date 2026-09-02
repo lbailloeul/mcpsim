@@ -1,0 +1,15 @@
+# Collider-mode example. The bremsstrahlung and Drell-Yan machinery is
+# fixed-target only, so those channels are disabled with a warning; only the
+# meson-decay channel runs.
+name: Collider Demo
+family: ship
+beam:
+  energy_gev: 400.0
+  frame: collider
+  energy_b_gev: 400.0
+  n_pot: 2.0e20
+detector:
+  type: cylindrical
+  distance_m: 100.0
+  radius_m: 0.5
+channels: [meson_decay, brem, drell_yan]

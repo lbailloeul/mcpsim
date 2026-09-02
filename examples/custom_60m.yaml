@@ -1,0 +1,13 @@
+# Custom DarkQuest-energy run with a different cylindrical detector geometry.
+# Inherits the darkquest preset (inferred from the 120 GeV beam), so fast mode
+# reuses the 120 GeV brem grids and meson spectra and only re-derives the
+# geometry-dependent acceptance.
+name: Custom 60m
+beam:
+  energy_gev: 120.0
+  frame: fixed_target
+  n_pot: 1.0e20
+detector:
+  type: cylindrical
+  distance_m: 60.0
+  radius_m: 0.5

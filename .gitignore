@@ -1,0 +1,24 @@
+# generated outputs (plots, tables, caches, compiled binaries)
+mcpsim-output/
+
+# python build/test artifacts
+__pycache__/
+*.pyc
+mcpsim.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# editors / OS
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
+
+# local AI-assistant settings
+.claude/
+
+# kept locally, not published
+CHANGELOG.md
+docs/handoff.md

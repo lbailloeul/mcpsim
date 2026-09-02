@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcpsim"
+dynamic = ["version"]
+description = "Config-driven CLI for millicharged-particle production and sensitivity at fixed-target / collider experiments"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Leo Bailloeul" }]
+dependencies = [
+    "numpy>=1.21",
+    "scipy>=1.7",
+    "matplotlib>=3.5",
+    "pyyaml>=6.0",
+    "click>=8.0",
+    "uproot>=5.0",
+]
+
+[project.optional-dependencies]
+# Heavy event-generation backends (PYTHIA event gen, VEGAS brem, ROOT decay).
+gen = ["mpi4py>=3.1", "vegas>=5.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+mcpsim = "mcpsim.cli:cli"
+
+[tool.setuptools]
+packages = ["mcpsim", "mcpsim.physics", "mcpsim.generation", "mcpsim.plotting", "mcpsim.validation"]
+
+[tool.setuptools.dynamic]
+version = { attr = "mcpsim.__version__" }
+
+[tool.setuptools.package-data]
+mcpsim = ["presets/*.yaml", "py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not parity and not golden'"
+markers = [
+    "parity: cross-checks the Python decay engine against the legacy C++ (needs ROOT + PYTHIA samples)",
+    "golden: bit-for-bit legacy-fidelity comparison against tests/golden/ (needs the source repo)",
+]

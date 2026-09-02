@@ -1,0 +1,53 @@
+name: LANL 12-bar
+family: lanl
+
+# Low-energy LANSCE beam: PYTHIA is invalid here, so meson generation uses the
+# Burman-Smith parametrization (pi0/eta only). Primarily a --regenerate preset;
+# the bremsstrahlung and Drell-Yan channels are not applicable at this energy.
+beam:
+  energy_gev: 0.8
+  frame: fixed_target
+  n_pot: 2.4e22
+
+# The LANSCE 800 MeV beam impinges on the Lujan tungsten spallation target
+# (Phys. Rev. D proposal). Note: the legacy Burman-Smith generator
+# (generatePion_12bar.cc) hardcodes Z=6 for the pi0 production *shape*; the
+# N_pi0 = 0.115 x POT rate quoted here is for the tungsten target. Target
+# rho/A do not enter the meson-decay (fast-mode) yield.
+target:
+  name: tungsten
+
+# Geometry of the 12-bar CeBr DEMONSTRATOR (3x2x2 bars at ER1 = 6 m), not the
+# full proposed LANSCE-mQ detector (which uses a larger array; ER1 = 6 m and
+# ER2 = 35 m locations). Adjust columns/rows/layers/distance for other configs.
+detector:
+  type: bar_array
+  distance_m: 6.0
+  bar_columns: 3
+  bar_rows: 2
+  bar_layers: 2
+  bar_size_m: 0.05
+  face_mode: rectangular
+
+# n_chi_threshold carries the background assumption: unlike the other presets
+# this is NOT a zero-background projection. 45 events is the proposal's own
+# background estimate for this run configuration. See docs/physics.md for how
+# to pick the number from the Feldman-Cousins tables (95% CL: Tables VI-VII of
+# arXiv:physics/9711021; roughly 1.64*sqrt(b) once b is large).
+sensitivity:
+  n_gamma: 5.0e6
+  a: 2
+  n_chi_threshold: 45.0
+  charge_min: 5.0e-6
+  charge_max: 1.0
+  n_charge: 500
+
+channels: [meson_decay]
+
+data:
+  mass_grid: mship_values.txt
+  # Precomputed 3x2x2 CeBr efficiency scans (ER1 = 6 m) from the LANL pipeline,
+  # resolved relative to the source-repo root.
+  acceptance:
+    pi0: lanl_12bar_pipeline/output/lanl_12bar_pi0_ER1_legacy_5M_mship_cebr3x2x2_efficiencies.txt
+    eta: lanl_12bar_pipeline/output/lanl_12bar_eta_ER1_legacy_5M_mship_cebr3x2x2_efficiencies.txt

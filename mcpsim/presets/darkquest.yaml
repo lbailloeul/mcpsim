@@ -1,0 +1,81 @@
+name: DarkQuest
+family: darkquest      # selects the legacy flat upsilon acceptance + plot styling
+
+# DarkQuest / SpinQuest at FNAL: 120 GeV Main-Injector protons on the FMAG
+# iron dump; a cylindrical mCP detector 40 m downstream, 0.5 m radius,
+# centred on the beam axis. 1e20 POT ~ the accumulated SpinQuest exposure
+# assumed in the pbrem paper (5 years).
+beam:
+  energy_gev: 120.0
+  frame: fixed_target
+  n_pot: 1.0e20
+
+# FMAG: the 5 m magnetized iron block acts as target + beam dump. Material
+# enters the brem effective luminosity (production within one interaction
+# length); meson multiplicities are tabulated per POT (PYTHIA pp).
+target:
+  name: iron
+
+# The precomputed acceptance files below were generated FOR THIS GEOMETRY
+# (40 m, 0.5 m). Fast mode loads them verbatim; if you override `detector:`
+# in a config inheriting this preset, acceptance is recomputed by the Python
+# engine from the archived PYTHIA samples instead (see docs/usage.md).
+# NOTE: the effect of the FMAG/KMAG magnetic sweeping on charged mCPs is
+# whatever the legacy acceptance production assumed — it is NOT re-simulated
+# by the Python engine, which propagates straight lines from the target.
+detector:
+  type: cylindrical
+  distance_m: 40.0
+  radius_m: 0.5
+  # The cylinder is the acceptance envelope; the detector itself is plastic
+  # bars. The length below feeds only the light-yield model (n_gamma), never
+  # the geometric acceptance.
+  bar_length_m: 1.5
+
+# Detection model P = (1 - exp(-n_gamma eps^2))^a * eps^2:
+#   n_gamma is DERIVED from the same light-yield calculation as the other
+#            bar detectors: plastic anchored at 2.5e5 PE (eps = 1) for a 1.5 m
+#            bar, scaled linearly with detector.bar_length_m -> 2.5e5 here.
+#            This reproduces the pbrem paper's value exactly.
+#   a = 3            three-layer coincidence
+#   n_chi_threshold = 3.09  95% CL exclusion for zero background
+#                    (Feldman-Cousins upper limit for 0 observed / 0 expected;
+#                    arXiv:physics/9711021 Tables VI-VII. Raise it for a search
+#                    with real background -- see docs/physics.md.)
+sensitivity:
+  scintillator: plastic
+  a: 3
+  n_chi_threshold: 3.09
+  charge_min: 1.0e-5
+  charge_max: 1.0
+  n_charge: 500
+
+channels: [meson_decay, brem, drell_yan]
+
+data:
+  # 199-mass log grid, 1 MeV - 7.4 GeV (shared with the LANL preset; SHiP
+  # uses the longer mship_values_copy grid — historical, not physical).
+  mass_grid: mship_values.txt
+  # eVMD proton-brem grids WITH the rho/omega resonances (canonical set;
+  # the archived "off_resonance" variant was a one-off test, see docs/data.md).
+  # Do not naively sum brem with the PYTHIA vector-meson channel in the
+  # resonance region — the resonant production is counted in both.
+  brem_dir: DarkQuest-brem-backup
+  brem_pattern: "Brem_120GeV_*.txt"
+  # MadGraph LO qq_bar -> gamma* -> chi chi_bar, nCTEQ15 iron nPDF; the
+  # cross file is 1-column, POSITIONALLY paired with the ageo file
+  # (the dev-level DY audit checks the pairing). Generating cards not preserved.
+  dy_cross: dy_cross_darkquest_nCTEQ15_iron.txt
+  dy_ageo: ageo_darkquest_nCTEQ15_iron.txt
+  # Per-meson efficiency scans from the legacy DarkQuest decay pipeline
+  # (decayVectorMeson.cc / decayPion.cc at 40 m, 0.5 m). File names are the
+  # historical run names — see docs/data.md for the full manifest.
+  # Upsilon has no scan file: a flat acceptance (0.011357, ~ J/psi near
+  # threshold) is applied via `family` — see UPSILON_AGEO_DEFAULT.
+  acceptance:
+    pi0: total_efficiency_outputdecayPionDARK.txt
+    eta: total_efficiency_outputdecayEtaDARK.txt
+    rho: total_efficiency_output2bodydecay-rho.txt
+    omega: total_efficiency_output2bodydecay-omega.txt
+    phi: total_efficiency_output2bodydecay-phi.txt
+    jpsi: total_efficiency_output2body_decay-jsi.txt

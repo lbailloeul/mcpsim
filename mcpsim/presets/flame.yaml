@@ -1,0 +1,73 @@
+name: FLAME
+# family intentionally NOT darkquest: the legacy flat upsilon acceptance
+# (0.011357) belongs to the 40 m / 0.5 m DarkQuest cylinder and would inflate
+# the upsilon channel by ~4 orders of magnitude at this 20 cm face at 1 km.
+# With an unknown family the upsilon channel is skipped (its true yield here
+# is ~1e-4 of J/psi — negligible); set data.upsilon_ageo to include it.
+family: flame
+
+# FLAME at FNAL: a milliQan-style scintillator-bar mCP detector placed 1 km
+# from a 120 GeV proton target, OFF-AXIS (default 4 mrad; scan positions with
+# `mcpsim run --preset flame --offaxis 4,6.5,9,11.5,14`). The exposure is one
+# nominal 3.8e20 POT year.
+beam:
+  energy_gev: 120.0
+  frame: fixed_target
+  n_pot: 3.8e20
+
+# Graphite production target (NuMI/LBNF-style). Target material only enters
+# the bremsstrahlung effective luminosity; the PYTHIA meson multiplicities
+# are tabulated per POT independent of material.
+target:
+  name: carbon
+
+# 3 layers of 16 bars (4x4 per layer), each bar 5x5 cm x 1.5 m pointing at
+# the target -> 20x20 cm front face. The 1.5 m bar LENGTH enters only the
+# light-yield model (sensitivity.n_gamma), not the geometric acceptance.
+# There are no precomputed acceptance files for this geometry: acceptance is
+# computed on demand by the Python decay engine from the archived 120 GeV
+# PYTHIA samples (engine below), which also handles the off-axis offset.
+detector:
+  type: bar_array
+  distance_m: 1000.0
+  bar_columns: 4
+  bar_rows: 4
+  bar_layers: 3
+  bar_size_m: 0.05
+  bar_length_m: 1.5      # along the line of sight; sets n_gamma via scintillator
+  face_mode: rectangular
+  offaxis_mrad: 4.0
+
+# Detection model P = (1 - exp(-n_gamma eps^2))^a * eps^2:
+#   n_gamma is DERIVED: scintillator 'plastic' is anchored at 2.5e5 PE
+#             (eps = 1) for a 1.5 m bar and scales linearly with
+#             detector.bar_length_m -> 2.5e5 here,
+#   a = 3    three-layer coincidence,
+#   n_chi_threshold = 3.09 -> 95% CL exclusion for ZERO background
+#             (Feldman-Cousins upper limit for 0 observed, 0 expected;
+#             arXiv:physics/9711021 Tables VI-VII. This is the knob that
+#             carries the background assumption -- see docs/physics.md.)
+sensitivity:
+  scintillator: plastic
+  a: 3
+  n_chi_threshold: 3.09
+  charge_min: 1.0e-4
+  charge_max: 1.0
+  n_charge: 1200
+
+# PYTHIA meson decays only. Proton brem CAN be added
+# (--channels meson_decay,brem) and is computed off-axis with the exact
+# azimuthal kernel — but the precomputed Brem_120GeV grids use the eVMD form
+# factor WITH the rho/omega resonances (the canonical set), so summing brem
+# with the PYTHIA vector-meson channel double-counts the resonance region.
+# Combine with care.
+channels: [meson_decay]
+
+engine:
+  decay: python          # vectorized re-decay of the archived PYTHIA samples
+  fidelity: corrected    # use `legacy` to replicate the C++ sampler quirks
+
+data:
+  mass_grid: mship_values.txt
+  brem_dir: DarkQuest-brem-backup     # 120 GeV grids; see channels note above
+  brem_pattern: "Brem_120GeV_*.txt"

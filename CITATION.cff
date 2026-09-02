@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use mcpsim in your work, please cite it as below."
+title: "mcpsim: millicharged-particle production and sensitivity simulation"
+type: software
+authors:
+  - family-names: Bailloeul
+    given-names: Leo
+version: 0.2.0
+date-released: "2026-08-13"
+# doi: (fill after the first archived release, e.g. via Zenodo)
+repository-code: "https://github.com/lbailloeul/mcpsim"
+abstract: >-
+  Config-driven CLI computing millicharged-particle production (meson decays,
+  proton bremsstrahlung, Drell-Yan) and zero-background sensitivity
+  projections for fixed-target experiments (DarkQuest/SpinQuest, SHiP,
+  LANSCE-mQ, FLAME), with on/off-axis detector geometries and validated
+  Python + legacy-C++ decay engines.
