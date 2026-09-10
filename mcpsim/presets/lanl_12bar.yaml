@@ -27,6 +27,10 @@ detector:
   bar_rows: 2
   bar_layers: 2
   bar_size_m: 0.05
+  # 5 cm CeBr crystals: the length along the line of sight equals the
+  # transverse size. Feeds only the light-yield model (n_gamma), never the
+  # geometric acceptance.
+  bar_length_m: 0.05
   face_mode: rectangular
 
 # n_chi_threshold carries the background assumption: unlike the other presets
@@ -35,7 +39,10 @@ detector:
 # to pick the number from the Feldman-Cousins tables (95% CL: Tables VI-VII of
 # arXiv:physics/9711021; roughly 1.64*sqrt(b) once b is large).
 sensitivity:
-  n_gamma: 5.0e6
+  # n_gamma is DERIVED: the cebr anchor is 5.0e6 PE (eps = 1) for a 1.5 m bar,
+  # scaled linearly with detector.bar_length_m to the 5 cm crystals used here
+  # -> 1.67e5 PE.
+  scintillator: cebr
   a: 2
   n_chi_threshold: 45.0
   charge_min: 5.0e-6

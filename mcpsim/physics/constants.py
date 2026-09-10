@@ -59,15 +59,32 @@ MESONS: Dict[str, MesonSpec] = {
 # needed for the heavier / vector states.
 LOW_ENERGY_MESONS = ("pi0", "eta")
 
-# Per-POT meson multiplicities (c_meson) from PYTHIA, by beam energy. These are
-# *production* normalisations and cannot be derived without running the generator,
-# so fast mode reuses these tabulated sets; an unknown beam energy needs
-# --regenerate (PYTHIA reports the multiplicity directly).
+# Per-POT meson multiplicities (c_meson) from PYTHIA, by beam energy.
+#
+# Each value is (entries in that beam's parent sample) / (trials that generated
+# it), and reproduces the published table in arXiv:2512.11027 to the quoted
+# precision. The trial counts are not stored in the sample files -- they live in
+# the generator's run script (pi0 5e4, eta 2e5, rho 1e6, omega 1e6, phi 1e7,
+# jpsi 1e8), so the two have to be kept in step by hand.
+#
+# The upsilon entries cannot be checked this way: that generation was never run
+# (commented out in the run script), which is also why the upsilon channel
+# has to borrow the J/psi acceptance (see UPSILON_FAMILIES below).
+#
+# These are per-beam-energy: change the beam and every value changes. mcpsim
+# will not extrapolate -- an energy outside the tabulated set (matched within
+# 2%) raises, and you must supply data.c_meson yourself. Note that --regenerate
+# does NOT fill this in for you: it produces new parent samples but never counts
+# them, so the multiplicity for a new energy still has to be computed by hand as
+# entries / trials.
+#
+# The 120 GeV J/psi is carried at full precision (4087 parents / 1e8 trials);
+# the published plotting scripts rounded it to 4.0e-5. Do not "correct" it back.
 C_MESON_BY_BEAM: Dict[str, Dict[str, float]] = {
     # DarkQuest / SpinQuest, 120 GeV protons.
     "120": {
         "pi0": 4.7, "eta": 0.53, "rho": 0.61, "omega": 0.61,
-        "phi": 2.2e-2, "jpsi": 4.0e-5, "upsilon": 2.5e-9,
+        "phi": 2.2e-2, "jpsi": 4.087e-5, "upsilon": 2.5e-9,
     },
     # SHiP, 400 GeV protons.
     "400": {
@@ -79,6 +96,7 @@ C_MESON_BY_BEAM: Dict[str, Dict[str, float]] = {
 }
 
 
+
 @dataclass(frozen=True)
 class ScintillatorSpec:
     """Light-yield anchor for deriving sensitivity.n_gamma from geometry.
@@ -87,6 +105,12 @@ class ScintillatorSpec:
     traversal of a bar of length_ref_m (GEANT4-derived group numbers);
     n_gamma scales linearly with the traversed bar length:
         n_gamma = n_gamma_ref * bar_length_m / length_ref_m.
+
+    Linear scaling is an energy-deposition argument (dE/dx * L) and holds near
+    the anchor length. It says nothing about light *collection*, which falls off
+    over metre-scale bars through bulk attenuation, so do not read across a
+    large change in length -- the per-metre yields of two materials anchored at
+    very different lengths are not comparable for that reason.
     """
     name: str
     n_gamma_ref: float
@@ -96,9 +120,8 @@ class ScintillatorSpec:
 SCINTILLATORS: Dict[str, ScintillatorSpec] = {
     # 1.5 m plastic bar (FLAME/milliQan-style): 2.5e5 PE at eps = 1.
     "plastic": ScintillatorSpec("plastic", 2.5e5, 1.5),
-    # 1.5 m CeBr: 5.0e6 PE at eps = 1. (The LANSCE 12-bar preset's explicit
-    # n_gamma = 5.0e6 is the proposal's own number for its 5 cm crystals and
-    # is NOT derived from this anchor.)
+    # CeBr: 5.0e6 PE at eps = 1 for a 1.5 m bar. The LANSCE 12-bar
+    # demonstrator's 5 cm crystals scale down from this to 1.67e5.
     "cebr": ScintillatorSpec("cebr", 5.0e6, 1.5),
 }
 
@@ -119,33 +142,30 @@ TARGET_MATERIALS: Dict[str, TargetMaterial] = {
     "carbon": TargetMaterial("carbon", 6, 12.011, 2.0, 38.1),
 }
 
-# Geometric acceptance for the upsilon channel, one value per experiment family.
+# Experiment families for which the upsilon channel is computed.
 #
 # The upsilon is the one meson with no acceptance scan of its own. It is simply
-# produced too rarely for us to have built a parent sample: at 120 GeV upsilons
-# come out some 1.6e4 times less often than J/psi (see C_MESON_BY_BEAM below),
-# and even the J/psi sample we do have holds only 4132 events. Building an
-# upsilon sample of comparable size is a PYTHIA campaign in its own right, and
+# produced too rarely for a parent sample to have been built: at 120 GeV
+# upsilons come out some 1.6e4 times less often than J/psi (see C_MESON_BY_BEAM
+# above), and even the J/psi sample holds only a few thousand events. Building
+# a comparable upsilon sample is a PYTHIA campaign in its own right, and
 # attempts at one have not been practical.
 #
-# So we use the J/psi acceptance in its place, taking the value from the
-# low-mass end of the same family's scan and applying it at every mass:
-#   darkquest 0.011357  from total_efficiency_output2body_decay-jsi.txt
-#   ship      0.011338  from total_efficiency_output2body_decay-jsi-SHiP.txt
-# Both scans really are flat there (over their first 68 and 109 rows), so the
-# borrowed number is at least well defined.
+# So the upsilon borrows the J/psi's acceptance instead -- specifically the
+# first (low-mass) value of the J/psi acceptance computed for THAT run, held
+# flat across the mass grid. A preset geometry reads it from the archived scan;
+# an off-axis or custom geometry gets the value the Python engine just computed
+# for that detector. Without a J/psi acceptance there is nothing to borrow and
+# the channel is skipped (model._upsilon_ageo).
 #
-# For a channel worth roughly 1e-4 of the J/psi yield this is a comfortable
-# approximation, and it has never shifted a limit. Two things would be worth
-# checking if an upsilon sample ever becomes available. The J/psi acceptance is
-# not flat across the whole range -- the same scans rise to 0.019448 (darkquest)
-# and 0.04961 (ship) by their last row. And they stop at m_chi = 1.525 GeV,
-# essentially the J/psi's own kinematic edge, while upsilon decays stay open out
-# to m_chi = 4.73 GeV, so beyond about the first third of the upsilon's range we
-# are carrying a borrowed value into a region no scan has covered.
+# This set gates the channel: a family not listed here has no established basis
+# for the substitution and skips it. FLAME relies on that -- its 1 km bar array
+# is far enough from the DarkQuest/SHiP geometries that the borrow was judged
+# unsound.
 #
-# Practical note: the substitution is written as its own branch on the upsilon
-# in model.py (_add_meson_channels) rather than as a general fallback, so
-# introducing a real scan later means registering the sample in DEFAULT_SAMPLES
-# and removing that branch.
-UPSILON_AGEO_DEFAULT = {"darkquest": 0.011357, "ship": 0.011338}
+# What stays unvalidated: the J/psi acceptance is not flat in mass, and its scan
+# stops at m_chi = 1.525 GeV (the J/psi's own kinematic edge) while upsilon
+# decays stay open to m_chi = 4.73 GeV, so past roughly the first third of the
+# upsilon's range the borrowed value covers territory no scan has reached. The
+# channel is worth ~1e-4 of the J/psi yield and has never shifted a limit.
+UPSILON_FAMILIES = frozenset({"darkquest", "ship"})

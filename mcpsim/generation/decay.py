@@ -95,7 +95,7 @@ def _run_dalitz_scan(cfg: Config, meson: str, source: Path, mass_grid: np.ndarra
     work_dir.mkdir(parents=True, exist_ok=True)
     source = _as_text_source(Path(source), work_dir, meson)
 
-    src = paths.lanl_dir() / "lanl_decayPion_12bar.cc"
+    src = paths.legacy_dir() / "lanl_decayPion_12bar.cc"
     binary = common.compile_cpp(src, paths.CACHE_DIR / "bin" / "lanl_decayPion_12bar")
 
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -148,7 +148,7 @@ def _patched_vector_meson_binary(cfg: Config, work_dir: Path) -> Path:
     import re
 
     det = cfg.detector
-    src = paths.decay_dir() / "decayVectorMeson.cc"
+    src = paths.legacy_dir() / "decayVectorMeson.cc"
     if not src.exists():
         raise common.ToolchainError(f"decayVectorMeson.cc not found at {src}.")
     text = src.read_text()

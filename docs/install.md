@@ -30,44 +30,42 @@ The tree only needs to contain what your runs use (see
 - `experiment-contours-small/` — published-constraint contours (~332 KB)
 - `mesongen-backup/output-data/debug*.root` — PYTHIA parent samples (~3 GB,
   tier 2 only)
-- `lanl_12bar_pipeline/`, `decay-backup/`, `mesongen-backup/*.cc` — legacy
-  C++ sources (tier 3 only)
+- `lanl_12bar_pipeline/output/` — LANL efficiency scans (~24 KB)
 
-Build a distributable bundle from a full tree with
-`python tools/make_data_bundle.py` and verify a machine's copy with
-`mcpsim install --check-data` (both check sha256 against `data/MANIFEST.yaml`).
+The tree holds **data only**. Every generator and decay source mcpsim runs is
+shipped inside the package (`mcpsim/legacy/`), so tiers 3-4 need the external
+toolchains but no extra sources.
 
-### Public data record (Zenodo)
+Verify a machine's copy with `mcpsim install --check-data`, which checks
+sha256 for every file against `data/MANIFEST.yaml`.
 
-The paper's companion record — **[10.5281/zenodo.18330380](https://zenodo.org/records/18330380)**
+### Public data records (Zenodo)
+
+**The data record — [10.5281/zenodo.22690080](https://doi.org/10.5281/zenodo.22690080)**
+(*data files for mcpsim CLI*, CC-BY 4.0) is what you want. It is a single
+`data.zip` (3.6 GB) holding all 354 files in `data/MANIFEST.yaml`, already in
+the layout mcpsim expects:
+
+```bash
+unzip data.zip -d ~/mcpsim-data
+export MCPSIM_SOURCE_REPO=~/mcpsim-data
+mcpsim install --check-data          # 354 ok, 0 missing, 0 corrupt
+```
+
+Nothing needs rearranging, and nothing is missing — the mass grids, contour
+CSVs, LANL scans and both 120 and 400 GeV PYTHIA sample sets are all in it.
+
+**The paper's companion record — [10.5281/zenodo.18330380](https://zenodo.org/records/18330380)**
 (*Data and Code for "Dedicated Searches for Millicharged Particles at
-Intensity-Frontier Facilities: SpinQuest and SHiP"*, CC-BY 4.0) — publicly
-archives the DarkQuest + SHiP core inputs:
+Intensity-Frontier Facilities: SpinQuest and SHiP"*) archives the inputs behind
+the publication: the two brem grid sets, the DY files, the DarkQuest/SHiP
+acceptance scans, the legacy C++, and **`Minimal_MCP.zip`, the original
+FeynRules UFO model** the archived DY scans were generated with.
 
-- both brem grid sets (`DarkQuest-brem-backup.zip`, `SHiP-brem-backup.zip`),
-- the four DY files and all twelve DarkQuest/SHiP acceptance scans,
-- the legacy C++ (`decayPion.cc`, `decayVectorMeson.cc`, `mesonGen.cc`) and
-  `mCP_brem.py`,
-- **`Minimal_MCP.zip` — the original FeynRules UFO model** the archived DY
-  scans were generated with (see docs/physics.md).
-
-To use it as a source repo, unzip the brem archives and arrange the files in
-the expected layout: the two brem directories at the top level, everything
-else under `data-backup/` (and the C++ under `decay-backup/` /
-`mesongen-backup/` for the cpp engine).
-
-The record holds 328 of the 353 files in the manifest. It does **not** contain:
-
-- the mass grids (`mship_values.txt`, `mship_values_copy.txt`), which every
-  preset needs,
-- the eight experiment-contour CSVs drawn on the limit plots,
-- the LANL-preset files (both efficiency scans, both C++ sources, the README),
-- the ~3.2 GB of PYTHIA parent samples the Python decay engine runs on,
-- `data-backup/LXPLUS_BREM.md`, the write-up of how the brem grids were made,
-- `mesongen-backup/beam.config` and `momentum.config`, which record the PYTHIA
-  settings behind the archived samples.
-
-Those all come from the full mcpsim bundle (`tools/make_data_bundle.py`).
+You do not need it to run mcpsim — everything there that mcpsim uses is in
+`data.zip`, and the legacy sources ship inside the package (`mcpsim/legacy/`).
+The one thing it has that `data.zip` does not is `Minimal_MCP.zip`, needed only
+if you regenerate Drell-Yan against the original model (see docs/physics.md).
 
 ## The doctor
 

@@ -36,11 +36,13 @@ sample we have holds only 4132 events, reused 600 times over. An Υ sample of
 comparable size is a PYTHIA campaign in its own right, and attempts to produce
 one have not been practical.
 
-In its place we use the J/ψ acceptance, taken from the low-mass end of the same
-family's scan and applied at every mass (`UPSILON_AGEO_DEFAULT`, selected by
-`family`): 0.011357 for DarkQuest, 0.011338 for SHiP. Both scans are genuinely
-flat there — over their first 68 and 109 rows — so the borrowed value is at
-least well defined.
+In its place the Υ borrows the J/ψ's acceptance: the **first (low-mass) value of
+the J/ψ acceptance computed for that same run**, held flat across the mass grid.
+At a preset geometry that comes from the archived scan — 0.011357 for DarkQuest,
+0.011338 for SHiP, and both scans are genuinely flat there, over their first 68
+and 109 rows. At an off-axis or custom geometry it is whatever the Python engine
+just computed for *your* detector, so the borrowed number tracks the geometry
+rather than being pinned to the preset's.
 
 For a channel worth about 10⁻⁴ of the J/ψ yield this is a comfortable
 approximation, and it has never shifted a limit. Two things would be worth
@@ -51,16 +53,22 @@ J/ψ's own kinematic edge (m_J/ψ/2 = 1.55 GeV), while Υ → χχ̄ stays open 
 m_χ = 4.73 GeV — so past roughly the first third of the Υ's mass range we are
 carrying a borrowed number into territory no scan has covered.
 
-Setting `engine.decay: python` does not get around this. The Python engine
-works by re-decaying archived parent samples, and there are none for the Υ; the
-channel is handled by its own branch in `model.py`, which returns the value
-above before the engine is consulted.
+`engine.decay: python` does not produce an Υ acceptance directly — the engine
+re-decays archived parents and there are none for the Υ. What it does do is
+compute the J/ψ acceptance for your geometry, which is then what the Υ borrows.
 
-At any non-preset geometry the value is only an order-of-magnitude placeholder,
-and mcpsim warns accordingly. Families it does not recognise skip the channel
-altogether — the FLAME preset relies on this, since the DarkQuest value would
-overstate FLAME's Υ yield by some four orders of magnitude, which inflates the
-total flux by about 60% near m_χ = 1.5 GeV.
+Two things gate the channel (`model._upsilon_ageo`):
+
+- **`family`** decides whether the Υ runs at all (`constants.UPSILON_FAMILIES`,
+  currently DarkQuest and SHiP). An unrecognised family has no established basis
+  for the substitution and skips the channel. The FLAME preset relies on this —
+  its 1 km bar array is far enough from those geometries that the borrow was
+  judged unsound.
+- **A J/ψ acceptance must exist for the run.** Without one there is nothing to
+  borrow from and the channel is skipped rather than falling back on a number
+  measured at some other detector.
+
+`data.upsilon_ageo` overrides both, if you have a better value.
 
 ## Off-axis acceptance: the azimuthal kernel
 
@@ -85,8 +93,11 @@ a radial band narrower than a bin.
 - `n_γ` = photoelectrons at ε = 1 for a full bar traversal. Either set it
   directly, or set `sensitivity.scintillator` and `detector.bar_length_m` and
   it is derived by **linear scaling in bar length** from a material anchor
-  (`constants.SCINTILLATORS`): plastic 2.5×10⁵ @ 1.5 m, CeBr 5.0×10⁶ @ 1.5 m
-  — the group's GEANT4 numbers. `--ngamma` overrides either from the CLI.
+  (`constants.SCINTILLATORS`): plastic 2.5×10⁵ @ 1.5 m, CeBr 5.0×10⁶ @ 1.5 m —
+  each anchored at the length it was measured for. The linear scaling is an
+  energy-deposition argument, sound near the anchor length; it does not model
+  light attenuation, so do not extrapolate far from it. `--ngamma` overrides
+  either from the CLI.
 - `a` = number of layers in coincidence.
 - Exclusion boundary: smallest ε with N_signal ≥ `n_chi_threshold`.
 
@@ -172,14 +183,8 @@ bit-for-bit (`pytest -m golden`).
 
 ## Known provenance gaps (inherited)
 
-- `C_MESON_BY_BEAM` (π⁰ 4.7/POT at 120 GeV, etc.): "from PYTHIA" per the legacy
-  docs, but no run record exists to reproduce them. Treat as the pipeline's
-  defining constants.
-- `UPSILON_AGEO_DEFAULT` is not in this category. Where it came from is known —
-  the low-mass end of each family's J/ψ scan (see "Acceptance convention"
-  above). What is missing there is an Υ sample, not a run record.
 - The 120 GeV PYTHIA samples were generated with `HardQCD:all = on,
-  PhaseSpace:pTHatMin = 2` (recorded in `mesongen-backup/beam.config`) — a
+  PhaseSpace:pTHatMin = 2` — a
   hard-QCD-biased sample, not min-bias; the same bias underlies the published
   DarkQuest acceptances.
 - DY: see [data.md](data.md) (`_iron` tags on the molybdenum SHiP preset,

@@ -4,8 +4,8 @@ This page explains the data mcpsim runs on: what each input file contains,
 where it came from, and which files to be careful with.
 
 The authoritative machine-readable list, with sha256 checksums, is
-[`data/MANIFEST.yaml`](../data/MANIFEST.yaml). Bundles are built and verified
-against it with `tools/make_data_bundle.py` and `mcpsim install --check-data`.
+[`data/MANIFEST.yaml`](../data/MANIFEST.yaml). `mcpsim install --check-data`
+verifies a copy of the data against it.
 
 How mcpsim finds a data file (`paths.resolve_data`): an absolute path is used
 as given. A bare filename is looked for first in `<source-repo>/data-backup/`,
@@ -27,20 +27,23 @@ and then directly in `<source-repo>/`.
 How much is known about where each input came from, and how far you can chase
 it back:
 
-Before reading the table, one thing to keep straight: "publicly archived" means
-the file itself is on the Zenodo record, which covers 328 of the 353 files in
-the manifest. The mass grids, the constraint contours, the LANL pipeline, the
-PYTHIA parent samples, and a few small config and notes files are in the source
-repo only — see [install.md](install.md) for the full list. Several of the
-files cited below as evidence of provenance fall in that group.
+All 354 files in the manifest are published as `data.zip` on the data record,
+[10.5281/zenodo.22690080](https://doi.org/10.5281/zenodo.22690080). Where the
+table below says "publicly archived", it means the file *also* appears in the
+paper's companion record ([18330380](https://zenodo.org/records/18330380)),
+which is the citable provenance for the published inputs.
+
+The manifest tracks data only. The generator and decay sources live in the
+package (`mcpsim/legacy/`) and are versioned with the code, not checksummed
+here.
 
 | Input | What we know |
 |---|---|
-| brem grids | Fully traceable, and publicly archived on [Zenodo](https://zenodo.org/records/18330380) as two zips of 154 grids each. The headers document themselves, and `data-backup/LXPLUS_BREM.md` describes how they were produced: 154 Condor jobs, 8-way MPI, nitn = 10, neval = 4000. That write-up is not on the record, so a Zenodo download gives you the grids without it. |
-| LANL efficiency files | Fully traceable, but source-repo only — they are not on the Zenodo record. `lanl_12bar_pipeline/README.md` records the geometry and the number of trials. |
+| brem grids | Fully traceable, and publicly archived on [Zenodo](https://zenodo.org/records/18330380) as two zips of 154 grids each. The headers document themselves, and they were produced by 154 Condor jobs, 8-way MPI, nitn = 10, neval = 4000. |
+| LANL efficiency files | Fully traceable, but source-repo only — they are not on the Zenodo record. The geometry is the one in `lanl_12bar.yaml` (3x2x2 CeBr bars at ER1 = 6 m) and the filenames record the run: 5M trials, legacy fidelity. |
 | DarkQuest/SHiP acceptance scans | Publicly archived on the same Zenodo record, but we cannot say exactly how each one was made. The files carry no headers, and while the generating scripts survive (`run_efficiency_tests*.sh`), nothing records which script produced which file. The preset comments note which variant each preset uses. |
-| `C_MESON_BY_BEAM` | No provenance at all. These are recorded only as "from PYTHIA", with no run to reproduce them from, so they stand as defining constants of the pipeline. |
-| `UPSILON_AGEO_DEFAULT` | Known exactly. Both values come from the low-mass end of the family's own J/ψ scan: 0.011357 from `total_efficiency_output2body_decay-jsi.txt`, and 0.011338 from the `-SHiP` variant. The Υ is produced too rarely to have a scan of its own, so it borrows the J/ψ's. See docs/physics.md. |
+| `C_MESON_BY_BEAM` | **Traced.** Each value is (entries in that beam's parent sample) / (trials that generated it), and all twelve reproduce the published table at both energies. The trial counts are not stored in the samples — they live in the generator's run script (pi0 5e4, eta 2e5, rho 1e6, omega 1e6, phi 1e7, jpsi 1e8), so the two must be kept in step by hand. The Υ entries cannot be checked this way: that generation was never run. |
+| Υ acceptance | Not a stored constant. The Υ has no scan of its own — it is produced too rarely for a parent sample — so it borrows the first value of the J/ψ acceptance computed for the run in hand. At preset geometry that is 0.011357 (DarkQuest, from `total_efficiency_output2body_decay-jsi.txt`) or 0.011338 (SHiP, the `-SHiP` variant). See docs/physics.md. |
 | DY files | Publicly archived, but only partly traceable. The MadGraph cards were not preserved. The original UFO model (`Minimal_MCP.zip`) is on the record, though, so a rerun can now settle the questions below. The PDF set is known only from the filenames. |
 
 ## Open questions

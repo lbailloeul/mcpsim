@@ -138,37 +138,71 @@ def compute_production(cfg: Config) -> ProductionResult:
 
 def _add_meson_channels(cfg: Config, grid: np.ndarray, result: ProductionResult) -> None:
     rates = cfg.c_meson_rates()
+    computed: Dict[str, np.ndarray] = {}
     for name, spec in C.MESONS.items():
         if name not in rates:
             continue  # not produced at this beam energy (e.g. heavy states at low E)
         c = rates[name]
 
         if name == "upsilon":
-            ua = cfg.upsilon_ageo()
-            if (ua is not None and cfg.data.upsilon_ageo is None
-                    and not cfg.geometry_is_preset):
-                result.warnings.append(
-                    f"upsilon uses the flat family-'{cfg.family}' acceptance "
-                    f"({ua:g}) computed for that preset's geometry, not yours; "
-                    f"set data.upsilon_ageo or ignore the (tiny) channel."
-                )
+            # MESONS orders jpsi before upsilon, so its acceptance for THIS run
+            # is already in hand.
+            ua = _upsilon_ageo(cfg, computed.get("jpsi"), result)
             if ua is None:
-                result.warnings.append(
-                    f"no upsilon acceptance for family '{cfg.family}' (no scan "
-                    f"file exists in the legacy data; the known families are "
-                    f"darkquest/ship). Set data.upsilon_ageo to include it; "
-                    f"skipping the upsilon channel."
-                )
                 continue
-            ageo = np.full(grid.size, ua)  # no scan file in legacy data
+            ageo = np.full(grid.size, ua)
         else:
             ageo = _meson_ageo(cfg, name, grid, result)
             if ageo is None:
                 continue
 
+        computed[name] = ageo
         result.meson_channels[name] = meson_decay.meson_yield(
             spec, grid, ageo, cfg.beam.n_pot, c, fidelity=cfg.engine.fidelity
         )
+
+
+def _upsilon_ageo(cfg: Config, jpsi_ageo, result: ProductionResult):
+    """Flat acceptance for the upsilon, which has no scan of its own.
+
+    Preference order:
+      1. an explicit data.upsilon_ageo,
+      2. the low-mass value of the J/psi acceptance *as computed for this run*,
+         so the borrowed number always matches the geometry actually used.
+    `family` gates inclusion (C.UPSILON_FAMILIES).
+    Returns None (with a warning) when the family is unknown or no J/psi
+    acceptance exists; the channel is then skipped. See docs/physics.md for
+    why the borrow is needed at all.
+    """
+    if cfg.data.upsilon_ageo is not None:
+        return cfg.data.upsilon_ageo
+
+    # `family` decides whether the channel is included at all: an unrecognised
+    # family has no basis for the borrow and skips, exactly as before.
+    if cfg.family not in C.UPSILON_FAMILIES:
+        result.warnings.append(
+            f"no upsilon acceptance for family '{cfg.family}' (no scan file "
+            f"exists in the legacy data; the known families are "
+            f"darkquest/ship). Set data.upsilon_ageo to include it; "
+            f"skipping the upsilon channel."
+        )
+        return None
+
+    # The value is always this run's own J/psi acceptance, so it matches the
+    # geometry actually computed. Without one there is nothing to borrow from
+    # and the channel is skipped rather than falling back on a number measured
+    # at some other detector.
+    if jpsi_ageo is not None:
+        finite = jpsi_ageo[np.isfinite(jpsi_ageo) & (jpsi_ageo > 0)]
+        if finite.size:
+            return float(finite[0])
+
+    result.warnings.append(
+        "no J/psi acceptance was computed for this run, so the upsilon has "
+        "nothing to borrow from (it has no scan of its own); skipping the "
+        "upsilon channel. Enable the J/psi, or set data.upsilon_ageo."
+    )
+    return None
 
 
 def _meson_ageo(cfg: Config, name: str, grid: np.ndarray,

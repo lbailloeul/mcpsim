@@ -22,7 +22,19 @@ SOFTWARE.
 
 ---
 
-Note: this license covers the mcpsim package. The separately distributed data
-bundle may include legacy C++ sources carrying their own attributions, notably
-the SHiP/SpinQuest-derivative routines in decayVectorMeson.cc, which are not
-covered by this license and remain subject to their original terms.
+Note: this license covers the mcpsim package. The legacy generator and decay
+sources under mcpsim/legacy/ were written by several people and are included
+with attribution:
+
+  mesonGen.cc              Insung Hwang (Korea University),
+                           edited by Leo Bailloeul
+  mCP_brem.py              Saeid Foroughi (Carleton University)
+  decayVectorMeson.cc      Leo Bailloeul; the Do2BodyDecay function is taken
+                           from milliQan's milliq_mcgen
+                           (github.com/milliQan-sw/milliq_mcgen)
+  lanl_decayPion_12bar.cc  derived from Insung Hwang's lanl/decayPion.cc
+                           (github.com/insungg/mcp-production)
+  generatePion_12bar.cc    derived from Insung Hwang's lanl/generatePion.cc
+                           (github.com/insungg/mcp-production)
+
+Each file also carries its attribution in its own header.

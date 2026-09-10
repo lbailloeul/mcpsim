@@ -73,14 +73,6 @@ files:
     set: fast
     size: 4765
     sha256: 7e2f6014e412aff63f4389de4e6251aad45f44a568ef7cf823ddf932b042650e
-  - path: data-backup/LXPLUS_BREM.md
-    set: fast
-    size: 2111
-    sha256: 21a61c5c5e56536e35af0867a8bbed6b9b2a84814044c2d8f6dbc9d1bc75fd5a
-  - path: data-backup/mCP_brem.py
-    set: fast
-    size: 28048
-    sha256: d21c9bae5cf9febbf3b5ec5e0f60ad1da4bdc2805ff28262dbc831524c725741
   - path: DarkQuest-brem-backup/Brem_120GeV_0.001.txt
     set: fast
     size: 1200873
@@ -1345,10 +1337,6 @@ files:
     set: fast
     size: 3916
     sha256: 01a5f6640476e2f90a559e78cc22eac9436e8b3e9f80b53c51a6b0a7c1e81821
-  - path: lanl_12bar_pipeline/README.md
-    set: fast
-    size: 1596
-    sha256: 58ffa9fbe562d9570cc70cf730803b097fb442a03a8df92c654cb8189f0d3b65
   - path: lanl_12bar_pipeline/output/lanl_12bar_pi0_ER1_legacy_5M_mship_cebr3x2x2_efficiencies.txt
     set: fast
     size: 6059
@@ -1357,60 +1345,76 @@ files:
     set: fast
     size: 7856
     sha256: 9698c040fb624d0699256db43365a89e95a5aa0300f833523b022618214c38ea
-  - path: mesongen-backup/mesonGen.cc
-    set: legacy-cpp
-    size: 3553
-    sha256: a3c92e59b3247b5d31ceb9b53e921b1d83532fb600a199a164ef5a87b83c57c8
-  - path: mesongen-backup/momentum.config
-    set: legacy-cpp
-    size: 517
-    sha256: abb83fcfc26a85d3a99d92d0c98ad1f0c7a777b9313e1f7af46fa2c16c54367c
-  - path: mesongen-backup/beam.config
-    set: legacy-cpp
-    size: 551
-    sha256: 195b6f8babf6c28866c634533989f89cba163ae154aa0c2f5a2a1d4d2ed897b2
-  - path: mesongen-backup/CMakeLists.txt
-    set: legacy-cpp
-    size: 1365
-    sha256: e742842388de6b800c5ca67c9f0b85bc55b85067809d6fa8acaa7f82ff35d421
-  - path: lanl_12bar_pipeline/generatePion_12bar.cc
-    set: legacy-cpp
-    size: 4890
-    sha256: a5dbd18499bc9f023c48ea2b2723aca830407cc2e7c89832ed552ece725166a7
-  - path: lanl_12bar_pipeline/lanl_decayPion_12bar.cc
-    set: legacy-cpp
-    size: 16351
-    sha256: bde25c9fdd71ee8f738af800e2ac9de0fa3687b370f2cc3d16ddae5cfe6800cc
-  - path: decay-backup/decayVectorMeson.cc
-    set: legacy-cpp
-    size: 9236
-    sha256: 1e01b8c68509a376ce11fc3144741ac492c9ac7db8590dfc6be45b04a178961c
-  - path: decay-backup/decayPion.cc
-    set: legacy-cpp
-    size: 10321
-    sha256: 8294f65bead847c740e497be0e207912201ce4ed329a19d73160776bed25c704
-  - path: mesongen-backup/output-data/debugPi0.root
+  - path: mesongen-backup/output-data/mesons_120GeV_pi0.root
+    set: samples
+    size: 12639918
+    sha256: a6cb695795eb7b0f8d5abc912040599a1ea09fdda6b0563e706bb15adb52fb05
+  - path: mesongen-backup/output-data/mesons_120GeV_eta.root
+    set: samples
+    size: 5708373
+    sha256: 632ebad5d2c0de018acfd30dca6d0ae19c020e7c5cdaa49a7bafb96126d99f6d
+  - path: mesongen-backup/output-data/mesons_120GeV_rho.root
+    set: samples
+    size: 33015921
+    sha256: 34d83aee0cf011aed1a5e3d54558af314d20ab9e01f8511fa8bf97194d5f9b47
+  - path: mesongen-backup/output-data/mesons_120GeV_omega.root
+    set: samples
+    size: 33082354
+    sha256: 715ce632424c451781264fb72eee5f026ac13fa53138e6d4521d815bd711f395
+  - path: mesongen-backup/output-data/mesons_120GeV_phi.root
+    set: samples
+    size: 11638756
+    sha256: 1119a5c87e2c87f718bf4647b13d9b9285d6bb37692ffb9f387af2eb522d6363
+  - path: mesongen-backup/output-data/mesons_120GeV_jpsi.root
+    set: samples
+    size: 236141
+    sha256: 5cff9327c61b3f530804a126363a0bee6f42fe4d273a562a41e81fc995a9f373
+  - path: mesongen-backup/output-data/mesons_400GeV_pi0.root
+    set: samples
+    size: 20245663
+    sha256: ce721e0ce521717d1363b6fc1d0c7cd619496de8e0609aa5ad737c61e943c7e1
+  - path: mesongen-backup/output-data/mesons_400GeV_eta.root
+    set: samples
+    size: 9183115
+    sha256: 611725bbbe39d4dbf5ee8307a2e8fa9937c43dd7429dd615edacb8bb13090ad1
+  - path: mesongen-backup/output-data/mesons_400GeV_rho.root
+    set: samples
+    size: 54526971
+    sha256: c71d877e3d7544e6ac5645735fca40a34f8e67e45617818c9115fa8cdde5abf1
+  - path: mesongen-backup/output-data/mesons_400GeV_omega.root
+    set: samples
+    size: 54251588
+    sha256: d14e94d95ec716c73a44a095bc51446eb0982910c7b8bb7f532e241a71dd7f07
+  - path: mesongen-backup/output-data/mesons_400GeV_phi.root
+    set: samples
+    size: 22131578
+    sha256: 60d86108d5eeec46a5b89362045791b627e4afb345231c6e0de4b4effa7e7f10
+  - path: mesongen-backup/output-data/mesons_400GeV_jpsi.root
+    set: samples
+    size: 462409
+    sha256: bc7c4c36efc343c1ac9ca60269e27586a1e3bd41779aec3f5552deccc4f2a5d9
+  - path: mesongen-backup/output-data/mesons_120GeV_pi0_highstat.root
     set: samples
     size: 2520386276
     sha256: 1493b2b96595bcb44bc84710bd0309faa479004fdb3a7be05aa28335e69de4ee
-  - path: mesongen-backup/output-data/debugEta.root
+  - path: mesongen-backup/output-data/mesons_120GeV_eta_highstat.root
     set: samples
     size: 284724818
     sha256: eb7b04193d59c16ee4fc755525ebb9b71aeae634b64b7b602344ab11c67fcc66
-  - path: mesongen-backup/output-data/debugRHO.root
+  - path: mesongen-backup/output-data/mesons_120GeV_rho_highstat.root
     set: samples
     size: 37599352
     sha256: 6af18379ccb83e67cabe3e5c7fd01391d2c0f940d32b0ef3efb4ab4f931c5015
-  - path: mesongen-backup/output-data/debugOmega.root
+  - path: mesongen-backup/output-data/mesons_120GeV_omega_highstat.root
     set: samples
     size: 373973547
     sha256: 85fb51d75d283fba3def3674ea39b4b4062c7947a926cca713a1c960d682caf4
-  - path: mesongen-backup/output-data/debugPhi.root
+  - path: mesongen-backup/output-data/mesons_120GeV_phi_highstat.root
     set: samples
     size: 13155180
     sha256: 16793406f95d7e78a2491fb80af36348c77832d1f1249bdb67393ee11cc9d224
-  - path: mesongen-backup/output-data/debugJsi.root
+  - path: mesongen-backup/output-data/mesons_120GeV_jpsi_highstat.root
     set: samples
     size: 263658
     sha256: 91240f38ffed244106bef09f55826c9e8bc76c4eb52787412a791cda3b7e39b6
-total_bytes: 3600195342
+total_bytes: 3857239590

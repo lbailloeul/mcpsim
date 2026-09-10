@@ -22,3 +22,4 @@ dist/
 # kept locally, not published
 CHANGELOG.md
 docs/handoff.md
+tools/

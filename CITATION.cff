@@ -6,8 +6,8 @@ authors:
   - family-names: Bailloeul
     given-names: Leo
 version: 0.2.0
-date-released: "2026-08-13"
-# doi: (fill after the first archived release, e.g. via Zenodo)
+date-released: "2026-09-10"
+# doi: (fill after the first archived release)
 repository-code: "https://github.com/lbailloeul/mcpsim"
 abstract: >-
   Config-driven CLI computing millicharged-particle production (meson decays,

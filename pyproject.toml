@@ -33,7 +33,7 @@ packages = ["mcpsim", "mcpsim.physics", "mcpsim.generation", "mcpsim.plotting", 
 version = { attr = "mcpsim.__version__" }
 
 [tool.setuptools.package-data]
-mcpsim = ["presets/*.yaml", "py.typed"]
+mcpsim = ["presets/*.yaml", "py.typed", "legacy/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

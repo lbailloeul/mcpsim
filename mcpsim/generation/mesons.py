@@ -54,7 +54,7 @@ def _generate_burman_smith(meson: str, work_dir: Path, trials: int, seed: int) -
             f"Burman-Smith generator only supports {LOW_ENERGY_MESONS}; got '{meson}'. "
             f"Heavier mesons need a beam energy above {LOW_ENERGY_THRESHOLD_GEV} GeV (PYTHIA)."
         )
-    src = paths.lanl_dir() / "generatePion_12bar.cc"
+    src = paths.legacy_dir() / "generatePion_12bar.cc"
     binary = common.compile_cpp(src, paths.CACHE_DIR / "bin" / "generatePion_12bar")
     out = work_dir / f"{meson}_source.txt"
     common.run([binary, str(out), str(trials), str(seed), str(MOTHER_MASS_MEV[meson])])
@@ -65,7 +65,7 @@ def _generate_pythia(cfg: Config, meson: str, work_dir: Path, trials: int,
                      seed: int, n_cores: int) -> Path:
     if meson not in PYTHIA_MESON_ID:
         raise common.ToolchainError(f"unknown meson '{meson}' for PYTHIA generation.")
-    src = paths.mesongen_dir() / "mesonGen.cc"
+    src = paths.legacy_dir() / "mesonGen.cc"
     binary = common.compile_cpp(src, paths.CACHE_DIR / "bin" / "mesonGen", with_pythia=True)
 
     _write_beam_config(cfg, work_dir / "beam.config")
@@ -95,7 +95,7 @@ def _write_beam_config(cfg: Config, dest: Path) -> None:
 
 
 def _copy_momentum_config(dest: Path) -> None:
-    src = paths.mesongen_dir() / "momentum.config"
+    src = paths.legacy_dir() / "momentum.config"
     if src.exists():
         dest.write_text(src.read_text())
     else:  # minimal hard-QCD configuration if the repo file is absent

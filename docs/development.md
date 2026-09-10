@@ -55,8 +55,10 @@ and `decay._patched_vector_meson_binary`.
   delta quantified in the fidelity table in `docs/physics.md`.
 - Engine changes must keep the parity harness within |z| ≤ 3
   (`pytest -m parity`, or `python -m mcpsim.validation.parity --quick`).
-  These are development tools by design — they are deliberately NOT exposed
-  on the user CLI.
+  Both run as modules (`python -m mcpsim.validation.parity`,
+  `python -m mcpsim.validation.dy_audit`) rather than as `mcpsim` subcommands:
+  anyone can run them, they are just kept off the user-facing CLI because they
+  answer development questions, not analysis ones.
 
 ## Tests
 

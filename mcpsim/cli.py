@@ -210,9 +210,9 @@ def _check_data() -> int:
 
     manifest_path = paths.PROJECT_ROOT / "data" / "MANIFEST.yaml"
     if not manifest_path.exists():
-        click.secho(f"no manifest at {manifest_path} — run "
-                    f"`python tools/make_data_bundle.py --manifest-only` "
-                    f"from a machine with the full source tree.", fg="red")
+        click.secho(f"no manifest at {manifest_path} — your checkout is "
+                    f"incomplete; re-clone or restore data/MANIFEST.yaml.",
+                    fg="red")
         return 2
     try:
         repo = paths.require_source_repo()

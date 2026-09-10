@@ -92,15 +92,16 @@ def test_scintillator_derives_ngamma(tmp_path):
     # plastic anchor: 2.5e5 @ 1.5 m -> half the length, half the light
     assert cfg.sensitivity.n_gamma == pytest.approx(1.25e5)
 
+    # cebr anchor: 5.0e6 @ 1.5 m
     p2 = _write(tmp_path, "name: t\nbeam: {energy_gev: 120.0}\n"
                           "detector: {type: bar_array, bar_length_m: 1.5}\n"
                           "sensitivity: {scintillator: cebr}\n")
     assert load_config(p2).sensitivity.n_gamma == pytest.approx(5.0e6)
-    # linear scaling: a 0.5 m CeBr bar carries a third of the light
+    # the LANSCE 12-bar demonstrator's 5 cm crystals scale down 30x
     p3 = _write(tmp_path, "name: t\nbeam: {energy_gev: 120.0}\n"
-                          "detector: {type: bar_array, bar_length_m: 0.5}\n"
+                          "detector: {type: bar_array, bar_length_m: 0.05}\n"
                           "sensitivity: {scintillator: cebr}\n")
-    assert load_config(p3).sensitivity.n_gamma == pytest.approx(5.0e6 / 3.0)
+    assert load_config(p3).sensitivity.n_gamma == pytest.approx(5.0e6 / 30.0)
 
 
 def test_scintillator_and_ngamma_together_raise(tmp_path):
@@ -120,12 +121,19 @@ def test_unknown_scintillator_raises(tmp_path):
 
 
 def test_scintillator_needs_bar_length(tmp_path):
-    # lanl_12bar carries no bar_length_m of its own, so there is nothing to
-    # inherit and the derivation has no length to scale by.
-    p = _write(tmp_path, "name: t\npreset: lanl_12bar\n"
+    # No beam energy -> no base preset is inferred, so there is no bar_length_m
+    # to inherit and the derivation has no length to scale by.
+    p = _write(tmp_path, "name: t\ndetector: {type: bar_array}\n"
                          "sensitivity: {scintillator: plastic}\n")
     with pytest.raises(ValueError, match="bar_length_m"):
         load_config(p)
+
+    # Explicitly clearing an inherited length raises too.
+    p2 = _write(tmp_path, "name: t\nbeam: {energy_gev: 120.0}\n"
+                          "detector: {bar_length_m: null}\n"
+                          "sensitivity: {scintillator: plastic}\n")
+    with pytest.raises(ValueError, match="bar_length_m"):
+        load_config(p2)
 
 
 def test_scintillator_inherits_bar_length_from_base_preset(tmp_path):

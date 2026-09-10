@@ -74,19 +74,22 @@ def brem_ship_dir() -> Path:
 
 
 def mesongen_dir() -> Path:
+    """Source-repo home of the archived PYTHIA parent samples (output-data/)."""
     return source_repo() / "mesongen-backup"
 
 
-def decay_dir() -> Path:
-    return source_repo() / "decay-backup"
+def legacy_dir() -> Path:
+    """Legacy generator/decay sources, shipped inside the package.
 
-
-def lanl_dir() -> Path:
-    return source_repo() / "lanl_12bar_pipeline"
+    These are code, not data: they travel with mcpsim rather than with the
+    data bundle, so `--regenerate` and the cpp engine work from a pip install
+    with no source repo present.
+    """
+    return Path(__file__).resolve().parent / "legacy"
 
 
 def mcp_brem_script() -> Path:
-    return data_dir() / "mCP_brem.py"
+    return legacy_dir() / "mCP_brem.py"
 
 
 def resolve_data(path_like: str | Path) -> Path:

@@ -24,22 +24,39 @@ off-axis).
 
 ## Install
 
+**1. The code.**
+
 ```bash
-git clone <this-repo> mcpsim && cd mcpsim
+git clone git@github.com:lbailloeul/mcpsim.git && cd mcpsim
 pip install -e '.[dev]'          # numpy scipy matplotlib pyyaml click uproot
-mcpsim install --dry-run         # "doctor": reports data + toolchain status
 ```
 
-mcpsim also needs the **data source repo**: the precomputed acceptance, brem,
-and DY inputs, about 355 MB for fast mode. Point `MCPSIM_SOURCE_REPO` at your
-`github-repo-scripts` checkout or data bundle.
+**2. The data.** The repository carries no data files. Download `data.zip`
+(3.6 GB) from the data record on Zenodo,
+[10.5281/zenodo.22690080](https://doi.org/10.5281/zenodo.22690080). It holds
+everything mcpsim runs on: the precomputed acceptance scans, bremsstrahlung
+grids, Drell-Yan files, published-constraint contours, and the PYTHIA parent
+samples at both 120 and 400 GeV.
 
-The DarkQuest and SHiP core inputs are publicly archived on the paper's Zenodo
-record, [10.5281/zenodo.18330380](https://zenodo.org/records/18330380). That
-covers the brem grids, the DY files, the acceptance scans, the legacy C++, and
-the original UFO model. For the directory layout, the full bundle, and the
-optional heavy toolchains (ROOT, PYTHIA, MPI, MadGraph), see
-[docs/install.md](docs/install.md).
+```bash
+unzip data.zip -d ~/mcpsim-data
+export MCPSIM_SOURCE_REPO=~/mcpsim-data     # add this to your shell profile
+```
+
+The archive already has the directory layout mcpsim expects, so there is
+nothing to rearrange.
+
+**3. Check it worked.**
+
+```bash
+mcpsim install --check-data      # verifies sha256 for every data file
+mcpsim install --dry-run         # "doctor": data + toolchain status
+```
+
+`--check-data` should report `342 ok, 0 missing, 0 corrupt`. The doctor will
+list missing optional toolchains (ROOT, PYTHIA, MPI, MadGraph) — none of those
+are needed for fast mode, which is what the Quick start below uses. See
+[docs/install.md](docs/install.md) for the dependency tiers and troubleshooting.
 
 ## Quick start
 
@@ -82,8 +99,8 @@ something you need to run yourself.
 Physics fidelity (`--fidelity`):
 
 - **corrected** (default) — physically-correct samplers and constants.
-- **legacy** — reproduces the published pipeline **bit for bit** (the 3.14-vs-π
-  Dalitz constant, the legacy sampler quirks, the cone-cut brem acceptance).
+- **legacy** — reproduces the published pipeline (the 3.14-vs-π Dalitz
+  constant, the legacy sampler quirks, the cone-cut brem acceptance).
   `pytest -m golden` enforces this against frozen tables.
 
 The corrected−legacy differences are small: +0.05% on Dalitz yields, ≤±8% on

@@ -67,7 +67,7 @@ def test_2body(quick: bool = False, verbose: bool = True) -> List[ParityRow]:
     import uproot
 
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    binary = compile_cpp(paths.decay_dir() / "decayVectorMeson.cc",
+    binary = compile_cpp(paths.legacy_dir() / "decayVectorMeson.cc",
                         paths.CACHE_DIR / "bin" / "decayVectorMeson")
     cfg = _cfg(quick)
     rho = samples.samples_dir(cfg) / samples.DEFAULT_SAMPLES["rho"].file
@@ -182,7 +182,7 @@ def _side_plane_hits(P, m, fidelity, rng) -> int:
 def test_dalitz(quick: bool = False, verbose: bool = True) -> List[ParityRow]:
     """lanl_decayPion_12bar.cc vs pydecay (legacy + corrected fidelity)."""
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    binary = compile_cpp(paths.lanl_dir() / "lanl_decayPion_12bar.cc",
+    binary = compile_cpp(paths.legacy_dir() / "lanl_decayPion_12bar.cc",
                         paths.CACHE_DIR / "bin" / "lanl_decayPion_12bar")
     cfg = _cfg(quick)
     n = 400_000 if quick else N_PI0

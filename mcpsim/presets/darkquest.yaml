@@ -71,7 +71,7 @@ data:
   # (decayVectorMeson.cc / decayPion.cc at 40 m, 0.5 m). File names are the
   # historical run names — see docs/data.md for the full manifest.
   # Upsilon has no scan file: a flat acceptance (0.011357, ~ J/psi near
-  # threshold) is applied via `family` — see UPSILON_AGEO_DEFAULT.
+  # threshold) is applied via `family` — see UPSILON_FAMILIES.
   acceptance:
     pi0: total_efficiency_outputdecayPionDARK.txt
     eta: total_efficiency_outputdecayEtaDARK.txt

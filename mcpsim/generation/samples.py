@@ -3,8 +3,9 @@
 The vectorized decay engine (generation/pydecay.py) re-decays archived PYTHIA
 parent mesons instead of re-running the generator, which makes acceptance for
 a *new* detector geometry a minutes-scale computation. The archived samples
-live in the source repo (mesongen-backup/output-data/debug*.root, 120 GeV
-fixed-target, HardQCD pTHatMin=2) unless engine.samples_dir points elsewhere.
+live in the source repo (mesongen-backup/output-data/, fixed-target, HardQCD
+pTHatMin=2) unless engine.samples_dir points elsewhere. Sets exist for the
+120 and 400 GeV beams; see DEFAULT_SAMPLES.
 
 Per-meson defaults balance MC precision against runtime: high-statistics
 samples (pi0, eta, omega) are subsampled, low-statistics ones (rho, phi,
@@ -34,22 +35,52 @@ class SampleSpec:
     repeats: int
 
 
-# The archived samples were generated at this beam energy; using them for a
-# different beam would silently produce wrong kinematics.
-SAMPLE_BEAM_GEV = 120.0
-
-# Tuned for ~2-3% (8% for jpsi, limited by 4132 parents) clustered MC error
-# on a ~4e-8 sr face at 1 km; see the FLAME off-axis study. The tuning covers
-# 4-14 mrad off-axis; if you push past that, check the reported worst relerr
-# (and the JSON sidecars) rather than assuming these counts still suffice.
-DEFAULT_SAMPLES: Dict[str, SampleSpec] = {
-    "pi0":   SampleSpec("debugPi0.root",   6_000_000, 1),
-    "eta":   SampleSpec("debugEta.root",   4_000_000, 1),
-    "rho":   SampleSpec("debugRHO.root",   None,      7),
-    "omega": SampleSpec("debugOmega.root", 4_000_000, 1),
-    "phi":   SampleSpec("debugPhi.root",   None,      18),
-    "jpsi":  SampleSpec("debugJsi.root",   None,      600),
+# Archived parent samples, by beam energy. Using a sample from the wrong beam
+# would silently produce wrong kinematics, so each set is keyed by the energy
+# it was generated at and matched within 2% (the same rule as
+# constants.C_MESON_BY_BEAM).
+#
+# n_use x repeats is tuned for ~2-3% clustered MC error (8% for jpsi, limited by
+# its few thousand parents) on a ~4e-8 sr face at 1 km; see the FLAME off-axis
+# study. The tuning covers 4-14 mrad off-axis; if you push past that, check the
+# reported worst relerr (and the JSON sidecars) rather than assuming these
+# counts still suffice. Both sets target the same effective decay count, so the
+# 400 GeV entries -- a smaller archive -- carry proportionally more repeats.
+#
+# The 120 GeV set uses the higher-statistics samples: acceptance is a per-species
+# ratio, so the trial counts behind them do not matter here. Per-POT
+# multiplicities must NOT be derived from these files (see C_MESON_BY_BEAM).
+DEFAULT_SAMPLES: Dict[str, Dict[str, SampleSpec]] = {
+    "120": {
+        "pi0":   SampleSpec("mesons_120GeV_pi0_highstat.root",   6_000_000, 1),
+        "eta":   SampleSpec("mesons_120GeV_eta_highstat.root",   4_000_000, 1),
+        "rho":   SampleSpec("mesons_120GeV_rho_highstat.root",   None,      7),
+        "omega": SampleSpec("mesons_120GeV_omega_highstat.root", 4_000_000, 1),
+        "phi":   SampleSpec("mesons_120GeV_phi_highstat.root",   None,      18),
+        "jpsi":  SampleSpec("mesons_120GeV_jpsi_highstat.root",  None,      600),
+    },
+    "400": {
+        "pi0":   SampleSpec("mesons_400GeV_pi0.root",   None, 16),
+        "eta":   SampleSpec("mesons_400GeV_eta.root",   None, 24),
+        "rho":   SampleSpec("mesons_400GeV_rho.root",   None, 4),
+        "omega": SampleSpec("mesons_400GeV_omega.root", None, 4),
+        "phi":   SampleSpec("mesons_400GeV_phi.root",   None, 9),
+        "jpsi":  SampleSpec("mesons_400GeV_jpsi.root",  None, 297),
+    },
 }
+
+
+def _sample_set(cfg: Config) -> Optional[Dict[str, SampleSpec]]:
+    """The sample set matching this config's beam, or None if there is none.
+
+    With engine.samples_dir set the user supplies their own files, so the beam
+    guard is waived and the 120 GeV naming is used as the filename convention.
+    """
+    from ..config import _beam_key
+    key = _beam_key(cfg.beam.energy_gev)
+    if key in DEFAULT_SAMPLES:
+        return DEFAULT_SAMPLES[key]
+    return DEFAULT_SAMPLES["120"] if cfg.engine.samples_dir else None
 
 
 def samples_dir(cfg: Config) -> Path:
@@ -60,15 +91,12 @@ def samples_dir(cfg: Config) -> Path:
 
 
 def have_samples(cfg: Config, meson: str) -> bool:
-    """True when the archived sample for `meson` is available AND applicable
-    (the archives are 120 GeV; a different beam energy must not use them)."""
-    spec = DEFAULT_SAMPLES.get(meson)
-    if spec is None or not (samples_dir(cfg) / spec.file).exists():
+    """True when a parent sample for `meson` exists AND matches this beam."""
+    specs = _sample_set(cfg)
+    if specs is None:
         return False
-    if (not cfg.beam.is_collider and cfg.engine.samples_dir is None
-            and abs(cfg.beam.energy_gev - SAMPLE_BEAM_GEV) > 0.02 * SAMPLE_BEAM_GEV):
-        return False
-    return True
+    spec = specs.get(meson)
+    return spec is not None and (samples_dir(cfg) / spec.file).exists()
 
 
 def load_parents(cfg: Config, meson: str, *, quick: bool = False
@@ -80,15 +108,13 @@ def load_parents(cfg: Config, meson: str, *, quick: bool = False
     mass). `quick` caps the sample at 200k parents and a quarter of the
     repeats for smoke tests.
     """
-    if (not cfg.beam.is_collider
-            and abs(cfg.beam.energy_gev - SAMPLE_BEAM_GEV) > 0.02 * SAMPLE_BEAM_GEV
-            and cfg.engine.samples_dir is None):
+    specs = _sample_set(cfg)
+    if specs is None:
         raise common.ToolchainError(
-            f"the archived PYTHIA parent samples were generated at "
-            f"{SAMPLE_BEAM_GEV:g} GeV; this config's beam is "
-            f"{cfg.beam.energy_gev:g} GeV. Generate samples for this energy "
-            f"(`mcpsim generate mesons --engine cpp`, needs PYTHIA) and point "
-            f"engine.samples_dir at them."
+            f"no archived parent samples for a {cfg.beam.energy_gev:g} GeV beam "
+            f"(available: {', '.join(DEFAULT_SAMPLES)} GeV, matched within 2%). "
+            f"Generate samples for this energy (`mcpsim generate mesons`, needs "
+            f"PYTHIA) and point engine.samples_dir at them."
         )
     common.require_module(
         "uproot",
@@ -98,11 +124,11 @@ def load_parents(cfg: Config, meson: str, *, quick: bool = False
 
     from ..physics.constants import MESONS
 
-    spec = DEFAULT_SAMPLES.get(meson)
+    spec = specs.get(meson)
     if spec is None:
         raise common.ToolchainError(
             f"no archived parent sample is defined for meson '{meson}' "
-            f"(known: {', '.join(DEFAULT_SAMPLES)})."
+            f"(known: {', '.join(specs)})."
         )
     path = samples_dir(cfg) / spec.file
     if not path.exists():

@@ -256,15 +256,6 @@ class Config:
             f"data: {{c_meson: {{pi0: 4.7, eta: 0.53, ...}}}}."
         )
 
-    def upsilon_ageo(self) -> Optional[float]:
-        """Flat upsilon acceptance: explicit data.upsilon_ageo, else the
-        per-family legacy default, else None (channel is skipped with a
-        warning — previously an unknown family silently got DarkQuest's value)."""
-        if self.data.upsilon_ageo is not None:
-            return self.data.upsilon_ageo
-        return C.UPSILON_AGEO_DEFAULT.get(self.family)
-
-
 def _beam_key(energy_gev: float) -> Optional[str]:
     """Key into C_MESON_BY_BEAM if the energy matches a tabulated beam within
     2%, else None (previously any energy was rounded to the nearest GeV, so
