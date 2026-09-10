@@ -7,8 +7,9 @@ authors:
     given-names: Leo
 version: 0.2.0
 date-released: "2026-09-10"
-# doi: (fill after the first archived release)
+doi: "10.5281/zenodo.22698102"
 repository-code: "https://github.com/lbailloeul/mcpsim"
+license: MIT
 abstract: >-
   Config-driven CLI computing millicharged-particle production (meson decays,
   proton bremsstrahlung, Drell-Yan) and zero-background sensitivity
