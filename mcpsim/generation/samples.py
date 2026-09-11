@@ -83,6 +83,12 @@ def _sample_set(cfg: Config) -> Optional[Dict[str, SampleSpec]]:
     return DEFAULT_SAMPLES["120"] if cfg.engine.samples_dir else None
 
 
+def sample_spec(cfg: Config, meson: str) -> Optional[SampleSpec]:
+    """The SampleSpec for `meson` at this config's beam, or None."""
+    specs = _sample_set(cfg)
+    return specs.get(meson) if specs else None
+
+
 def samples_dir(cfg: Config) -> Path:
     """Directory holding the parent ROOT samples."""
     if cfg.engine.samples_dir:

@@ -252,12 +252,13 @@ def acceptance_on_grid(cfg: Config, meson: str, grid: np.ndarray, *,
 def geometry_hash(cfg: Config, meson: str, grid: np.ndarray) -> str:
     """Cache key: everything the acceptance result depends on."""
     det = cfg.detector
-    spec = samples.DEFAULT_SAMPLES.get(meson)
+    spec = samples.sample_spec(cfg, meson)
     payload = {
         "det": [det.type, det.distance_m, det.radius_m, det.bar_columns,
                 det.bar_rows, det.bar_size_m, det.offaxis_mrad],
         "engine": [cfg.engine.fidelity, cfg.engine.seed,
                    str(samples.samples_dir(cfg))],
+        "beam": [cfg.beam.energy_gev, cfg.beam.frame],
         "sample": [spec.file, spec.n_use, spec.repeats] if spec else None,
         "grid": [float(grid[0]), float(grid[-1]), int(grid.size)],
     }

@@ -70,7 +70,7 @@ def test_2body(quick: bool = False, verbose: bool = True) -> List[ParityRow]:
     binary = compile_cpp(paths.legacy_dir() / "decayVectorMeson.cc",
                         paths.CACHE_DIR / "bin" / "decayVectorMeson")
     cfg = _cfg(quick)
-    rho = samples.samples_dir(cfg) / samples.DEFAULT_SAMPLES["rho"].file
+    rho = samples.samples_dir(cfg) / samples.sample_spec(cfg, "rho").file
     arr = uproot.open(rho)["mesons"].arrays(["px", "py", "pz", "e"], library="np")
     P = tuple(arr[k].astype(np.float64) for k in ("px", "py", "pz", "e"))
     theta_cut = np.arctan2(CONE_R, CONE_D)
@@ -111,7 +111,7 @@ def _pi0_parents(cfg: Config, n: int):
     import uproot
 
     t = uproot.open(samples.samples_dir(cfg)
-                    / samples.DEFAULT_SAMPLES["pi0"].file)["mesons"]
+                    / samples.sample_spec(cfg, "pi0").file)["mesons"]
     a = t.arrays(["magnitude", "theta", "phi"], entry_stop=n, library="np")
     p = a["magnitude"].astype(np.float64)
     ct = np.cos(a["theta"].astype(np.float64))
