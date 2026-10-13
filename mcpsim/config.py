@@ -8,10 +8,11 @@ detector geometry at a known beam energy.
 
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import yaml
 
@@ -19,6 +20,51 @@ from . import paths
 from .physics import constants as C
 
 DEFAULT_CHANNELS = ["meson_decay", "brem", "drell_yan"]
+# Short names accepted wherever channels are given (they match `mcpsim generate`).
+CHANNEL_ALIASES = {"mesons": "meson_decay", "meson": "meson_decay",
+                   "dy": "drell_yan", "drellyan": "drell_yan"}
+TOP_LEVEL_KEYS = ("preset", "name", "family", "source_repo", "channels", "beam",
+                  "target", "detector", "legacy_detector", "sensitivity", "data",
+                  "engine")
+# Short names for the tabulated target materials (iron = the DarkQuest dump,
+# molybdenum = the SHiP TZM target, carbon = NuMI/LBNF graphite).
+TARGET_ALIASES = {"fe": "iron", "mo": "molybdenum", "moly": "molybdenum",
+                  "tzm": "molybdenum", "w": "tungsten", "c": "carbon",
+                  "graphite": "carbon"}
+
+
+def normalize_target(name: str) -> str:
+    """Canonical tabulated material for a name or alias; unknown names raise
+    (custom materials need the full Z/A/density/lambda set in a YAML config)."""
+    key = str(name).strip().lower()
+    canon = TARGET_ALIASES.get(key, key)
+    if canon not in C.TARGET_MATERIALS:
+        raise ValueError(
+            f"unknown target '{name}'"
+            f"{_did_you_mean(key, list(C.TARGET_MATERIALS) + list(TARGET_ALIASES))}; "
+            f"known: iron (DarkQuest), molybdenum (SHiP), tungsten, carbon "
+            f"(graphite); aliases: {', '.join(TARGET_ALIASES)}")
+    return canon
+
+
+def _did_you_mean(word: str, choices: Iterable[str]) -> str:
+    close = difflib.get_close_matches(word, list(choices), n=1, cutoff=0.5)
+    return f" (did you mean '{close[0]}'?)" if close else ""
+
+
+def normalize_channels(channels: Iterable[str]) -> List[str]:
+    """Map aliases to canonical channel names; an unknown name raises (it used
+    to run with no yield at all and write empty plots)."""
+    out = []
+    for ch in channels:
+        name = CHANNEL_ALIASES.get(str(ch).strip().lower(), str(ch).strip())
+        if name not in DEFAULT_CHANNELS:
+            raise ValueError(
+                f"unknown channel '{ch}'{_did_you_mean(name, DEFAULT_CHANNELS)}; "
+                f"valid: {', '.join(DEFAULT_CHANNELS)} (aliases: mesons, dy)")
+        if name not in out:
+            out.append(name)
+    return out
 
 
 class _FloatLoader(yaml.SafeLoader):
@@ -62,8 +108,9 @@ class BeamConfig:
 
 @dataclass
 class TargetConfig:
-    """Target material. Enters the bremsstrahlung effective luminosity only;
-    per-POT meson multiplicities are tabulated independent of material."""
+    """Target material. Enters the brem channel through the effective
+    luminosity and the sigma_pA rescale of the grids (physics.brem); per-POT
+    meson multiplicities are tabulated independent of material."""
     name: str = "iron"
     Z: int = 26
     A: float = 55.845
@@ -86,15 +133,18 @@ class TargetConfig:
                 f"valid keys: {sorted(allowed)}"
             )
         name = d.get("name", "iron")
+        name = TARGET_ALIASES.get(str(name).strip().lower(), name)
         mat = C.TARGET_MATERIALS.get(name)
         overrides = {k: d[k] for k in ("Z", "A", "density_g_cm3", "interaction_length_cm")
                      if d.get(k) is not None}
         if mat is None and len(overrides) < 4:
             raise ValueError(
-                f"unknown target material '{name}' (known: "
-                f"{', '.join(sorted(C.TARGET_MATERIALS))}). Either use a known "
-                f"name or supply all of Z, A, density_g_cm3, "
-                f"interaction_length_cm for a custom material."
+                f"unknown target material '{name}'"
+                f"{_did_you_mean(str(name).lower(), list(C.TARGET_MATERIALS) + list(TARGET_ALIASES))} "
+                f"(known: {', '.join(sorted(C.TARGET_MATERIALS))}; aliases: "
+                f"{', '.join(TARGET_ALIASES)}). Either use a known name or "
+                f"supply all of Z, A, density_g_cm3, interaction_length_cm for a "
+                f"custom material."
             )
         base = dict(
             name=name,
@@ -181,7 +231,20 @@ class DataConfig:
     acceptance: Dict[str, str] = field(default_factory=dict)  # meson -> file
     brem_dir: Optional[str] = None
     brem_pattern: str = "Brem_*.txt"
+    # Polar angle up to which the brem grids are valid: they carry the
+    # acceptance of the detector they were generated for, so brem through any
+    # part of the face beyond this angle is underestimated (warned at run time).
+    brem_max_theta_mrad: Optional[float] = None
+    # The paper's MadGraph Drell-Yan scan (1-column pb, row-aligned with
+    # dy_ageo). By default (fidelity corrected) the cross sections come from
+    # the built-in per-material table for the target instead; this scan is
+    # used by fidelity legacy, when a user config sets it, or when no table
+    # exists for the target/beam energy (model.drell_yan_table).
     dy_cross: Optional[str] = None
+    # Target material whose nuclear PDFs the dy_cross scan was simulated with.
+    # The per-POT normalisation always follows the configured target; a
+    # different material here is reported at run time.
+    dy_material: Optional[str] = None
     dy_ageo: Optional[str] = None
     mass_grid: str = "mship_values.txt"
     c_meson: Optional[Dict[str, float]] = None
@@ -201,6 +264,11 @@ class Config:
     beam: BeamConfig = field(default_factory=BeamConfig)
     target: TargetConfig = field(default_factory=TargetConfig)
     detector: DetectorConfig = field(default_factory=DetectorConfig)
+    # The detector of the published analysis, when it differs from `detector`
+    # (DarkQuest/SHiP: the paper's r = 0.5 m disc vs the 1 x 1 m face mcpsim
+    # models). The archived acceptance files were made for it, and fidelity
+    # legacy models it instead of `detector` (see run_config).
+    legacy_detector: Optional[DetectorConfig] = None
     sensitivity: SensitivityConfig = field(default_factory=SensitivityConfig)
     data: DataConfig = field(default_factory=DataConfig)
     channels: List[str] = field(default_factory=lambda: list(DEFAULT_CHANNELS))
@@ -210,6 +278,10 @@ class Config:
     # preset's precomputed acceptance files are valid. A user config that
     # overrides `detector:` flips this and acceptance is recomputed.
     geometry_is_preset: bool = True
+    # True while data.dy_cross is the base preset's scan, which the built-in
+    # per-material Drell-Yan table replaces by default. A user config that
+    # sets data.dy_cross flips this and its own scan is used.
+    dy_cross_is_preset: bool = True
 
     # -- derived helpers ----------------------------------------------------
     @property
@@ -267,6 +339,17 @@ def _beam_key(energy_gev: float) -> Optional[str]:
     return None
 
 
+def run_config(cfg: Config) -> Config:
+    """The configuration a run models. fidelity = legacy on a preset that
+    records the published detector (legacy_detector) models that detector, so
+    the archived acceptance files and the brem cut reproduce the paper; every
+    other run models `detector`. Idempotent."""
+    if (cfg.engine.fidelity == "legacy" and cfg.geometry_is_preset
+            and cfg.legacy_detector is not None):
+        return replace(cfg, detector=cfg.legacy_detector)
+    return cfg
+
+
 # -- loading ----------------------------------------------------------------
 def list_presets() -> List[str]:
     if not paths.PRESETS_DIR.exists():
@@ -278,7 +361,8 @@ def load_preset(name: str) -> Config:
     path = paths.PRESETS_DIR / f"{name}.yaml"
     if not path.exists():
         raise FileNotFoundError(
-            f"Unknown preset '{name}'. Available: {', '.join(list_presets()) or '(none)'}"
+            f"Unknown preset '{name}'{_did_you_mean(name, list_presets())}. "
+            f"Available: {', '.join(list_presets()) or '(none)'}"
         )
     return _config_from_dict(_read_yaml(path))
 
@@ -292,7 +376,8 @@ def load_config(path: str | Path) -> Config:
         base_name = _infer_base_preset(raw)
     elif base_name not in list_presets():
         raise ValueError(
-            f"unknown preset '{base_name}' referenced by the 'preset:' key; "
+            f"unknown preset '{base_name}' referenced by the 'preset:' key"
+            f"{_did_you_mean(str(base_name), list_presets())}; "
             f"available: {', '.join(list_presets()) or '(none)'}"
         )
     base = load_preset(base_name) if base_name and base_name in list_presets() else Config()
@@ -302,6 +387,8 @@ def load_config(path: str | Path) -> Config:
     # precomputed acceptance files; model._meson_ageo recomputes in that case.
     if "detector" in raw:
         cfg = replace(cfg, geometry_is_preset=False)
+    if "dy_cross" in (raw.get("data") or {}):
+        cfg = replace(cfg, dy_cross_is_preset=False)
 
     # An inferred base preset drags its precomputed brem/DY/acceptance inputs
     # along; if the beam energy differs from the preset's, those inputs were
@@ -339,6 +426,14 @@ def _config_from_dict(raw: dict, base: Optional[Config] = None) -> Config:
     """Build a Config from a dict, overlaying on an optional base preset."""
     cfg = base or Config()
 
+    # A misspelled section ('detecor:') used to be ignored silently, leaving
+    # the inherited preset values in force.
+    unknown = set(raw) - set(TOP_LEVEL_KEYS)
+    if unknown:
+        hint = "".join(_did_you_mean(k, TOP_LEVEL_KEYS) for k in sorted(unknown))
+        raise ValueError(f"unknown top-level key(s) {sorted(unknown)}{hint}; "
+                         f"valid keys: {', '.join(TOP_LEVEL_KEYS)}")
+
     if "name" in raw:
         cfg = replace(cfg, name=raw["name"])
     if "family" in raw:
@@ -347,7 +442,7 @@ def _config_from_dict(raw: dict, base: Optional[Config] = None) -> Config:
         cfg = replace(cfg, source_repo=raw["source_repo"])
         paths.set_source_repo(raw["source_repo"])
     if "channels" in raw:
-        cfg = replace(cfg, channels=list(raw["channels"]))
+        cfg = replace(cfg, channels=normalize_channels(raw["channels"]))
 
     if "beam" in raw:
         cfg = replace(cfg, beam=replace(cfg.beam, **_clean(raw["beam"], BeamConfig, "beam")))
@@ -355,6 +450,9 @@ def _config_from_dict(raw: dict, base: Optional[Config] = None) -> Config:
         cfg = replace(cfg, target=TargetConfig.from_dict(raw["target"]))
     if "detector" in raw:
         cfg = replace(cfg, detector=replace(cfg.detector, **_clean(raw["detector"], DetectorConfig, "detector")))
+    if "legacy_detector" in raw:
+        cfg = replace(cfg, legacy_detector=DetectorConfig(
+            **_clean(raw["legacy_detector"], DetectorConfig, "legacy_detector")))
     if "sensitivity" in raw:
         cfg = replace(cfg, sensitivity=replace(cfg.sensitivity, **_clean(raw["sensitivity"], SensitivityConfig, "sensitivity")))
         sens_raw = raw["sensitivity"] or {}
@@ -373,6 +471,16 @@ def _config_from_dict(raw: dict, base: Optional[Config] = None) -> Config:
         cfg = replace(cfg, data=replace(cfg.data, **_clean(raw["data"], DataConfig, "data")))
     if "engine" in raw:
         cfg = replace(cfg, engine=replace(cfg.engine, **_clean(raw["engine"], EngineConfig, "engine")))
+
+    # n_gamma derived from an inherited scintillator must follow an overridden
+    # bar length (it used to keep the base preset's value silently).
+    if (base is not None and cfg.sensitivity.scintillator
+            and "bar_length_m" in (raw.get("detector") or {})
+            and "n_gamma" not in (raw.get("sensitivity") or {})):
+        cfg = replace(cfg, sensitivity=replace(
+            cfg.sensitivity,
+            n_gamma=_scintillator_n_gamma(cfg.sensitivity.scintillator,
+                                          cfg.detector.bar_length_m)))
 
     return cfg
 
@@ -408,8 +516,9 @@ def _clean(d: dict, dc, section: str) -> dict:
     allowed = {f.name for f in dc.__dataclass_fields__.values()}
     unknown = set(d or {}) - allowed
     if unknown:
+        hint = "".join(_did_you_mean(k, allowed) for k in sorted(unknown))
         raise ValueError(
             f"unknown key(s) {sorted(unknown)} in the '{section}' config "
-            f"section; valid keys: {sorted(allowed)}"
+            f"section{hint}; valid keys: {sorted(allowed)}"
         )
     return dict(d or {})

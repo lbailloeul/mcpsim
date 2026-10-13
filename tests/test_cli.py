@@ -75,3 +75,83 @@ def test_generate_dy_fails_loud_without_mg5(runner, mini_repo, tmp_path,
                             "-o", str(tmp_path / "out")])
     assert r.exit_code != 0
     assert "produced no outputs" in r.output
+
+
+def test_preset_and_config_together_rejected(runner, tmp_path):
+    p = tmp_path / "c.yaml"
+    p.write_text("name: t\n")
+    r = runner.invoke(cli, ["run", "-p", "darkquest", "-c", str(p)])
+    assert r.exit_code != 0
+    assert "not both" in r.output
+
+
+def test_channel_typo_rejected(runner, mini_repo):
+    r = runner.invoke(cli, ["production", "-p", "darkquest", "--channels", "brems"])
+    assert r.exit_code != 0
+    assert "did you mean 'brem'" in r.output
+
+
+def test_production_writes_its_plot_tables_and_run_record(runner, mini_repo, tmp_path):
+    cfg = tmp_path / "mini.yaml"
+    cfg.write_text("name: mini\nbeam: {energy_gev: 120.0}\nchannels: [mesons]\n"
+                   "data: {mass_grid: mship_values.txt, acceptance: {pi0: acc_pi0.txt}}\n")
+    out = tmp_path / "out"
+    r = runner.invoke(cli, ["production", "-c", str(cfg), "-o", str(out)])
+    assert r.exit_code == 0, r.output
+    assert (out / "production_mini.pdf").exists()
+    assert not (out / "limit_mini.pdf").exists()
+    assert (out / "production_mini.txt").exists() and (out / "run_mini.yaml").exists()
+
+
+def test_doctor_runs_without_data(runner, monkeypatch):
+    monkeypatch.setenv("MCPSIM_SOURCE_REPO", "/definitely-nonexistent")
+    r = runner.invoke(cli, ["doctor"])
+    assert r.exit_code == 0
+    assert "External toolchains" in r.output and "zenodo" in r.output
+
+
+def test_target_swap_by_keyword(runner, mini_repo, tmp_path):
+    cfg = tmp_path / "mini.yaml"
+    cfg.write_text("name: mini\nbeam: {energy_gev: 120.0}\nchannels: [mesons]\n"
+                   "data: {mass_grid: mship_values.txt, acceptance: {pi0: acc_pi0.txt}}\n")
+    out = tmp_path / "out"
+    r = runner.invoke(cli, ["production", "-c", str(cfg), "--target", "mo", "-o", str(out)])
+    assert r.exit_code == 0, r.output
+    assert "molybdenum target" in r.output
+    import yaml
+    rec = yaml.safe_load((out / "run_mini_molybdenum.yaml").read_text())
+    assert rec["config"]["target"]["name"] == "molybdenum"
+    assert rec["config"]["target"]["A"] == 95.95
+
+
+def test_target_typo_suggests(runner):
+    r = runner.invoke(cli, ["run", "-p", "darkquest", "--target", "mobelium"])
+    assert r.exit_code != 0
+    assert "did you mean 'molybdenum'" in r.output
+
+
+def test_compare_overlays_runs_and_writes_their_tables(runner, mini_repo, tmp_path):
+    cfgs = []
+    for name in ("mini a", "mini b"):
+        c = tmp_path / f"{name.replace(' ', '_')}.yaml"
+        c.write_text(f"name: {name}\nbeam: {{energy_gev: 120.0}}\nchannels: [mesons]\n"
+                     "data: {mass_grid: mship_values.txt, acceptance: {pi0: acc_pi0.txt}}\n")
+        cfgs += ["-c", str(c)]
+    out = tmp_path / "cmp"
+    r = runner.invoke(cli, ["compare", *cfgs, "-o", str(out)])
+    assert r.exit_code == 0, r.output
+    assert (out / "limit_compare_mini_a_vs_mini_b.pdf").exists()
+    assert (out / "limit_compare_mini_a_vs_mini_b.png").exists()
+    for tag in ("mini_a", "mini_b"):
+        assert (out / f"limit_curve_{tag}.txt").exists() and (out / f"run_{tag}.yaml").exists()
+    assert runner.invoke(cli, ["compare"]).exit_code != 0       # nothing to compare
+
+
+def test_legacy_runs_get_their_own_name_and_folder(runner, mini_repo, tmp_path):
+    cfg = tmp_path / "mini.yaml"
+    cfg.write_text("name: mini\nbeam: {energy_gev: 120.0}\nchannels: [mesons]\n"
+                   "data: {mass_grid: mship_values.txt, acceptance: {pi0: acc_pi0.txt}}\n")
+    r = runner.invoke(cli, ["limit", "-c", str(cfg), "--fidelity", "legacy", "-o", str(tmp_path / "o")])
+    assert r.exit_code == 0, r.output
+    assert "[mini legacy]" in r.output
+    assert (tmp_path / "o" / "limit_mini_legacy.pdf").exists()

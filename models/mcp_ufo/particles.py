@@ -1,5 +1,5 @@
 # Particle content: the five light quarks + gluon + photon (enough for a
-# proton beam) and the millicharged Dirac fermion chi (pdg 9000001).
+# proton beam) and the millicharged Dirac fermion chi (pdg 31).
 # Quarks are massless (5-flavour PDF convention). The gluon is present so
 # the standard `p` multiparticle definition loads; there are NO QCD vertices
 # in this model, so gluon-initiated subprocesses simply have no diagrams at

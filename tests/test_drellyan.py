@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from mcpsim import paths
 from mcpsim.physics.constants import MB_TO_PB, SIGMA_PN_INELASTIC_MB
 from mcpsim.physics.drellyan import dy_yield, row_mismatch
 
@@ -46,3 +47,103 @@ def test_truncation_keeps_shorter_length(tmp_path, dy_files):
     np.savetxt(short, np.array([3.0, 1.5]))
     m, y = dy_yield(str(short), str(ageo_f), 1e20)
     assert m.size == y.size == 2
+
+
+def test_sigma_inel_per_nucleon_follows_target():
+    from mcpsim.physics.constants import TARGET_MATERIALS as T
+    from mcpsim.physics.drellyan import sigma_inel_per_nucleon_mb as s
+    per = {k: s(T[k].density_g_cm3, T[k].interaction_length_cm) for k in ("iron", "molybdenum", "carbon")}
+    assert per["iron"] == pytest.approx(12.56, rel=2e-3)        # ~ the published 13 mb
+    assert per["molybdenum"] == pytest.approx(10.66, rel=2e-3)
+    assert per["carbon"] == pytest.approx(19.35, rel=2e-3)
+
+
+# -- mass-keyed per-material tables ------------------------------------------
+
+def test_table_roundtrip_and_interpolation(tmp_path):
+    from mcpsim.physics.drellyan import load_table, sigma_from_table
+    path = tmp_path / "dy_sigma_iron_120GeV.txt"
+    path.write_text("# material: iron\n# acc_detector: 1 x 1 m face at 40 m\n"
+                    "# columns: m_chi [GeV], sigma [pb], acc\n"
+                    "0.01 100 0.04\n1.0 50 0.1\n4.0 1e-3 0.15\n")
+    table = load_table(path)
+    assert table.header["material"] == "iron"
+    assert table.acc_detector == "1 x 1 m face at 40 m"
+    np.testing.assert_array_equal(table.acc, [0.04, 0.1, 0.15])
+    m = np.array([0.001, 0.01, 0.1, 1.0, 2.0, 4.0, 5.0])
+    out = table.sigma_at(m)
+    np.testing.assert_allclose(out[:6], [100, 100, np.sqrt(100 * 50), 50,   # flat below,
+                                         np.sqrt(50 * 1e-3), 1e-3], rtol=1e-12)  # log-log
+    assert out[6] == 0.0                                    # beyond the table's reach
+    np.testing.assert_array_equal(sigma_from_table(table.masses, table.sigma_pb, m), out)
+    path.write_text("0.01 100\n1.0 50\n")                 # no acceptance column
+    assert load_table(path).acc is None and load_table(path).acc_detector is None
+
+
+def test_find_table_matches_energy_within_two_percent(tmp_path):
+    from mcpsim.physics.drellyan import find_table
+    for e in (120, 400):
+        (tmp_path / f"dy_sigma_iron_{e}GeV.txt").write_text("1 1\n")
+    assert find_table(tmp_path, 121.0, "iron").name == "dy_sigma_iron_120GeV.txt"
+    assert find_table(tmp_path, 400.0, "iron").name == "dy_sigma_iron_400GeV.txt"
+    assert find_table(tmp_path, 130.0, "iron") is None
+    assert find_table(tmp_path, 120.0, "lead") is None
+
+
+def test_yield_from_table_normalisation(tmp_path):
+    from mcpsim.physics.drellyan import dy_yield_table, load_table
+    path = tmp_path / "t.txt"
+    path.write_text("0.1 30 0.01\n1.0 20 0.02\n")
+    m, y = dy_yield_table(load_table(path), 1e20, 12.0)
+    np.testing.assert_array_equal(m, [0.1, 1.0])
+    np.testing.assert_allclose(y, 1e20 * np.array([30 * 0.01, 20 * 0.02]) / (12.0 * MB_TO_PB))
+    path.write_text("0.1 30\n")
+    with pytest.raises(ValueError, match="no acceptance column"):
+        dy_yield_table(load_table(path), 1e20, 12.0)
+
+
+def test_shipped_tables_cover_every_material_and_preset_energy():
+    from mcpsim import geometry
+    from mcpsim.config import load_preset
+    from mcpsim.physics.constants import TARGET_MATERIALS
+    from mcpsim.physics.drellyan import find_table, load_table
+    faces = {120.0: geometry.face_signature(load_preset("darkquest").detector),
+             400.0: geometry.face_signature(load_preset("ship").detector)}
+    for energy, face in faces.items():
+        sigma_1gev = {}
+        for name, mat in TARGET_MATERIALS.items():
+            table = load_table(find_table(paths.DY_TABLES_DIR, energy, name))
+            m, s, h = table.masses, table.sigma_pb, table.header
+            assert h["material"] == name and float(h["beam_energy_gev"]) == energy
+            assert (int(h["A"]), int(h["Z"])) == (round(mat.A), mat.Z)
+            assert np.all(np.diff(m) > 0) and np.all(s > 0)
+            assert 2 * m[-1] < float(h["sqrt_s_gev"])
+            # mass-independent below the 2 GeV pair-mass cut; vanishing at the end
+            assert s[1] == pytest.approx(s[0], rel=1e-4) and s[-1] < 1e-9 * s[0]
+            # the LO acceptance of the preset's 1 x 1 m face
+            assert table.acc_detector == face
+            assert np.all((table.acc > 0) & (table.acc < 1))
+            sigma_1gev[name] = float(table.sigma_at(np.array([1.0]))[0])
+        # per nucleon: isospin and nuclear suppression order the materials
+        assert (sigma_1gev["carbon"] > sigma_1gev["iron"] > sigma_1gev["molybdenum"]
+                > sigma_1gev["tungsten"])
+
+
+@pytest.mark.skipif(not paths.source_repo().exists(), reason="source repo not available")
+@pytest.mark.parametrize("preset", ["darkquest", "ship"])
+def test_iron_table_vs_the_paper_scan(preset):
+    """Same material and settings as the paper's scan; only the PDFs differ
+    (free-proton beam and the full iron nucleus vs the iron bound proton for
+    both beams): +3-11% below 3 GeV, within -6% further up."""
+    from mcpsim.config import load_preset
+    from mcpsim.physics.drellyan import find_table, load_table
+    cfg = load_preset(preset)
+    scan = np.loadtxt(paths.resolve_data(cfg.data.dy_cross))
+    mass = np.loadtxt(paths.resolve_data(cfg.data.dy_ageo))[:, 0]
+    table = load_table(find_table(paths.DY_TABLES_DIR, cfg.beam.energy_gev, "iron"))
+    m, s = table.masses, table.sigma_pb
+    keep = mass <= (5.0 if preset == "darkquest" else 8.0)
+    np.testing.assert_allclose(m[:keep.sum()], mass[keep], rtol=1e-6)   # same nodes
+    ratio = s[:keep.sum()] / scan[keep]
+    assert ratio.min() > 0.94 and ratio.max() < 1.12
+    assert np.all(ratio[mass[keep] < 2.5] > 1.03)

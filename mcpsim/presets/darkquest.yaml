@@ -2,34 +2,50 @@ name: DarkQuest
 family: darkquest      # selects the legacy flat upsilon acceptance + plot styling
 
 # DarkQuest / SpinQuest at FNAL: 120 GeV Main-Injector protons on the FMAG
-# iron dump; a cylindrical mCP detector 40 m downstream, 0.5 m radius,
-# centred on the beam axis. 1e20 POT ~ the accumulated SpinQuest exposure
-# assumed in the pbrem paper (5 years).
+# iron dump; a 1 x 1 m mCP detector face 40 m downstream, centred on the beam
+# axis. 1e20 POT ~ the accumulated SpinQuest exposure assumed in the pbrem
+# paper (5 years).
 beam:
   energy_gev: 120.0
   frame: fixed_target
   n_pot: 1.0e20
 
-# FMAG: the 5 m magnetized iron block acts as target + beam dump. Material
-# enters the brem effective luminosity (production within one interaction
-# length); meson multiplicities are tabulated per POT (PYTHIA pp).
+# FMAG: the 5 m magnetized iron block acts as target + beam dump. SpinQuest's
+# polarized NH3/ND3 cell sits upstream but is thin (a few % of an interaction
+# length), so production happens in the iron. Material enters brem (luminosity
+# + sigma_pA rescale, production within one interaction length) and Drell-Yan
+# (the per-material cross-section table + per-nucleon normalisation); meson
+# multiplicities are per POT (PYTHIA pp).
 target:
   name: iron
 
-# The precomputed acceptance files below were generated FOR THIS GEOMETRY
-# (40 m, 0.5 m). Fast mode loads them verbatim; if you override `detector:`
-# in a config inheriting this preset, acceptance is recomputed by the Python
-# engine from the archived PYTHIA samples instead (see docs/usage.md).
+# The detector: a 1 x 1 m face of 20 x 20 plastic bars (5 cm, 1.5 m long) —
+# the layout the brem grids were generated for. Meson acceptance is computed
+# for it by the Python engine from the archived PYTHIA samples (~2.5 min on the
+# first run, then cached under mcpsim-output/cache); Drell-Yan uses the LO
+# acceptance of this face carried by the built-in tables. The bar length feeds
+# only the light-yield model (n_gamma), never the geometric acceptance.
 # NOTE: the effect of the FMAG/KMAG magnetic sweeping on charged mCPs is
 # whatever the legacy acceptance production assumed — it is NOT re-simulated
 # by the Python engine, which propagates straight lines from the target.
 detector:
+  type: bar_array
+  distance_m: 40.0
+  bar_columns: 20
+  bar_rows: 20
+  bar_layers: 3
+  bar_size_m: 0.05
+  bar_length_m: 1.5
+  face_mode: rectangular
+
+# The published analysis modelled the acceptance as an r = 0.5 m disc at
+# 40 m; the archived meson and Drell-Yan acceptance files below are for it.
+# `fidelity: legacy` models this detector, so it reproduces the paper (a
+# config that sets `detector:` itself keeps its own).
+legacy_detector:
   type: cylindrical
   distance_m: 40.0
   radius_m: 0.5
-  # The cylinder is the acceptance envelope; the detector itself is plastic
-  # bars. The length below feeds only the light-yield model (n_gamma), never
-  # the geometric acceptance.
   bar_length_m: 1.5
 
 # Detection model P = (1 - exp(-n_gamma eps^2))^a * eps^2:
@@ -62,16 +78,26 @@ data:
   # resonance region — the resonant production is counted in both.
   brem_dir: DarkQuest-brem-backup
   brem_pattern: "Brem_120GeV_*.txt"
-  # MadGraph LO qq_bar -> gamma* -> chi chi_bar, nCTEQ15 iron nPDF; the
-  # cross file is 1-column, POSITIONALLY paired with the ageo file
-  # (the dev-level DY audit checks the pairing). Generating cards not preserved.
+  # The grids carry the acceptance of this 1 x 1 m face, but the generator
+  # puts the first chi at azimuth 0, so they resolve it only out to the face's
+  # half-width (arctan(0.5/40) = 12.5 mrad): the corners (to 17.7 mrad) are
+  # missing, and any face reaching beyond 12.5 mrad is warned.
+  brem_max_theta_mrad: 12.5
+  # Drell-Yan cross sections: by default the built-in LO table for the
+  # configured target and beam energy (mcpsim/data/drell_yan: free-proton beam
+  # on the nucleus, nCTEQ15), so `--target` changes them too. The paper's
+  # MadGraph scan below (iron bound-proton nPDF for BOTH beams) is used by
+  # `fidelity: legacy` and when a config sets data.dy_cross itself; it is
+  # 1-column, POSITIONALLY paired with the ageo file (the dev-level DY audit
+  # checks the pairing). The acceptance file is used in both cases.
   dy_cross: dy_cross_darkquest_nCTEQ15_iron.txt
+  dy_material: iron        # nPDF the scan was simulated with
   dy_ageo: ageo_darkquest_nCTEQ15_iron.txt
   # Per-meson efficiency scans from the legacy DarkQuest decay pipeline
-  # (decayVectorMeson.cc / decayPion.cc at 40 m, 0.5 m). File names are the
-  # historical run names — see docs/data.md for the full manifest.
-  # Upsilon has no scan file: a flat acceptance (0.011357, ~ J/psi near
-  # threshold) is applied via `family` — see UPSILON_FAMILIES.
+  # (decayVectorMeson.cc / decayPion.cc, r = 0.5 m disc at 40 m: the
+  # legacy_detector). File names are the historical run names — see
+  # docs/data.md for the full manifest. Upsilon has no scan file: it borrows
+  # this run's low-mass J/psi acceptance (0.011357 for the disc) via `family`.
   acceptance:
     pi0: total_efficiency_outputdecayPionDARK.txt
     eta: total_efficiency_outputdecayEtaDARK.txt

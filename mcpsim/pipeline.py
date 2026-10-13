@@ -7,15 +7,16 @@ channel degrades gracefully to the precomputed input if its toolchain is absent.
 
 from __future__ import annotations
 
-from dataclasses import replace
+import datetime
+from dataclasses import asdict, replace
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from . import paths
-from .config import Config
-from .model import ProductionResult, compute_production
+from .config import Config, run_config
+from .model import ProductionResult, compute_production, drell_yan_table
 from .physics.constants import MESONS
 from .plotting.limits import plot_limit
 from .plotting.production import plot_production
@@ -26,8 +27,13 @@ def run_pipeline(cfg: Config, *, regenerate: bool = False,
                  out_dir: Optional[Path] = None,
                  mass_subset: Optional[int] = None,
                  gen_opts: Optional[dict] = None,
-                 make_plots: bool = True) -> Tuple[ProductionResult, List[Path]]:
-    """Run the full pipeline; return (result, [plot paths])."""
+                 plots: Sequence[str] = ("production", "limit"),
+                 ) -> Tuple[ProductionResult, List[Path]]:
+    """Run the full pipeline; return (result, [written plot + table paths]).
+
+    `plots` selects which figures to draw; the numeric tables and the run
+    record are always written."""
+    cfg = run_config(cfg)
     if channels:
         cfg = replace(cfg, channels=list(channels))
     tag = cfg.tag
@@ -42,13 +48,13 @@ def run_pipeline(cfg: Config, *, regenerate: bool = False,
 
     result = compute_production(cfg)
     result.warnings = gen_warnings + result.warnings
-    write_tables(cfg, result, out_dir)
 
-    plots: List[Path] = []
-    if make_plots:
-        plots.append(plot_production(cfg, result, out_dir / f"production_{tag}.pdf"))
-        plots.append(plot_limit(cfg, result, out_dir / f"limit_{tag}.pdf"))
-    return result, plots
+    written: List[Path] = []
+    if "production" in plots:
+        written.append(plot_production(cfg, result, out_dir / f"production_{tag}.pdf"))
+    if "limit" in plots:
+        written.append(plot_limit(cfg, result, out_dir / f"limit_{tag}.pdf"))
+    return result, written + write_tables(cfg, result, out_dir)
 
 
 def write_tables(cfg: Config, result: ProductionResult, out_dir: Path) -> List[Path]:
@@ -90,7 +96,70 @@ def write_tables(cfg: Config, result: ProductionResult, out_dir: Path) -> List[P
     np.savetxt(lim_path, np.column_stack([result.masses, eps95]), fmt="%.8g",
                header=f"mass_GeV eps_at_{s.n_chi_threshold}_events "
                f"[D(eps)=(1-exp(-{s.n_gamma:g} eps^2))^{s.a:g} eps^2]")
-    return [prod_path, lim_path]
+    # exclusion_contour returns charge_min where the signal already passes the
+    # threshold at the bottom of the scan; that is a floor, not a limit.
+    clipped = int(np.sum(eps95 == charges[0]))
+    if clipped:
+        msg = (f"the limit hits the bottom of the charge scan (charge_min = "
+               f"{s.charge_min:g}) at {clipped} mass point(s): the true limit is "
+               f"stronger there. Lower sensitivity.charge_min.")
+        if msg not in result.warnings:
+            result.warnings.append(msg)
+    curve_path = write_limit_curve(cfg, result.masses, eps95, charges[0], out_dir)
+    return [prod_path, lim_path, curve_path, write_run_record(cfg, out_dir)]
+
+
+def write_limit_curve(cfg: Config, masses: np.ndarray, eps: np.ndarray, floor: float,
+                      out_dir: Path) -> Path:
+    """limit_curve_<tag>.txt: the exclusion boundary alone, for collaborators to
+    replot — the masses where the threshold is reached, with a header that
+    says what the curve is. Whitespace columns with '#' comments, so it loads
+    with np.loadtxt, ROOT's TGraph or gnuplot as it is."""
+    from . import __version__, geometry
+    cfg = run_config(cfg)
+    s, b = cfg.sensitivity, cfg.beam
+    ok = np.isfinite(eps)
+    n_floor = int(np.sum(ok & (eps <= floor)))
+    lines = [
+        f"mcpsim limit curve: {cfg.name}",
+        f"The excluded region lies above this curve: the epsilon = Q/e at which the "
+        f"expected signal reaches N = {s.n_chi_threshold:g} events",
+        "(3.09 = 95% CL for zero background, Feldman-Cousins; see docs/physics.md).",
+        f"Signal: N(m, eps) = Y(m) * eps^2 * (1 - exp(-n_gamma eps^2))^a, "
+        f"n_gamma = {s.n_gamma:g} photoelectrons at eps = 1, a = {s.a:g}",
+        f"Beam: {b.energy_gev:g} GeV protons on {cfg.target.name}, {b.n_pot:.3g} POT ({b.frame})",
+        f"Detector: {geometry.face_signature(cfg.detector)}",
+        f"Channels: {', '.join(cfg.channels)} (fidelity {cfg.engine.fidelity})",
+        f"{int(np.sum(~ok))} of {masses.size} mass points never reach N and are omitted.",
+    ]
+    if n_floor:
+        lines.append(f"At {n_floor} mass point(s) the signal already passes N at the "
+                     f"bottom of the charge scan (eps = {floor:g}): a floor, the true "
+                     f"limit is stronger there.")
+    lines += [f"Full configuration: run_{cfg.tag}.yaml; per-channel yields: "
+              f"production_{cfg.tag}.txt",
+              f"mcpsim {__version__}, {datetime.date.today().isoformat()}",
+              "m_chi [GeV]    epsilon"]
+    path = Path(out_dir) / f"limit_curve_{cfg.tag}.txt"
+    np.savetxt(path, np.column_stack([masses[ok], eps[ok]]), fmt="%.6e",
+               header="\n".join(lines))
+    return path
+
+
+def write_run_record(cfg: Config, out_dir: Path) -> Path:
+    """Record the fully resolved configuration (preset + config + CLI flags)
+    next to the outputs, so every table and plot can be traced and rerun."""
+    import yaml
+
+    from . import __version__
+    record = {"mcpsim_version": __version__, "data_source": str(paths.source_repo()),
+              "config": asdict(cfg)}
+    if "drell_yan" in cfg.channels:
+        table = drell_yan_table(cfg)
+        record["drell_yan_cross_sections"] = str(table) if table else cfg.data.dy_cross
+    path = Path(out_dir) / f"run_{cfg.tag}.yaml"
+    path.write_text(yaml.safe_dump(record, sort_keys=False))
+    return path
 
 
 def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = None,
@@ -186,7 +255,9 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
     if "drell_yan" in cfg.channels:
         try:
             dy_cross, dy_ageo = madgraph.generate_drell_yan(cfg, grid, gen_dir / "dy")
-            data = replace(data, dy_cross=str(dy_cross), dy_ageo=str(dy_ageo))
+            # MadGraph runs with the archived iron nPDF for both beams.
+            data = replace(data, dy_cross=str(dy_cross), dy_ageo=str(dy_ageo),
+                           dy_material=madgraph.DY_PDF_MATERIAL)
         except ToolchainError as exc:
             _skip(f"Drell-Yan regeneration skipped (using precomputed): {exc}")
 

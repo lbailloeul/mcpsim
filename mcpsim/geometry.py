@@ -56,6 +56,46 @@ def offaxis_offset_m(det: DetectorConfig) -> float:
     return det.distance_m * np.tan(1e-3 * det.offaxis_mrad)
 
 
+def face_max_theta(det: DetectorConfig) -> float:
+    """Largest polar angle any point of the face subtends from the target."""
+    d = offaxis_offset_m(det)
+    if det.type == "bar_array":
+        half_w = 0.5 * det.bar_columns * det.bar_size_m
+        half_h = 0.5 * det.bar_rows * det.bar_size_m
+        r_max = np.hypot(d + half_w, half_h)
+    else:
+        r_max = d + det.radius_m
+    return float(np.arctan(r_max / det.distance_m))
+
+
+def face_signature(det: DetectorConfig) -> str:
+    """The detector's face as a short string, e.g. '1 x 1 m face at 40 m' or
+    'r = 0.5 m disc at 100 m' (+ off-axis angle): two detectors with the same
+    signature have the same acceptance. Recorded with precomputed acceptances
+    (the Drell-Yan tables) to tell which detector they belong to."""
+    if det.type == "bar_array":
+        width, height = bar_array_dims(det)
+        face = f"{width:.4g} x {height:.4g} m face"
+    else:
+        face = f"r = {det.radius_m:.4g} m disc"
+    sig = f"{face} at {det.distance_m:.4g} m"
+    if det.offaxis_mrad:
+        sig += f", {det.offaxis_mrad:.4g} mrad off axis"
+    return sig
+
+
+def hit_fraction(det: DetectorConfig, r: np.ndarray) -> np.ndarray:
+    """Azimuth-averaged probability that a particle crossing the detector plane
+    at radius r lands on the face (face_hit_fraction / circle_hit_fraction)."""
+    d = offaxis_offset_m(det)
+    if det.type == "bar_array":
+        half_w, half_h = (0.5 * x for x in bar_array_dims(det))
+        return face_hit_fraction(r, d, half_w, half_h)
+    if det.type == "cylindrical":
+        return circle_hit_fraction(r, d, det.radius_m)
+    raise ValueError(f"unknown detector type {det.type!r}")
+
+
 def circle_hit_fraction(r: np.ndarray, d: float, radius: float) -> np.ndarray:
     """Azimuth-averaged probability of landing on a circular face of radius
     `radius` centred at transverse offset d (cylindrical detector analogue of

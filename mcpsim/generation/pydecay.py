@@ -36,7 +36,7 @@ from typing import Optional, Tuple
 import numpy as np
 
 from .. import geometry
-from ..config import Config, DetectorConfig
+from ..config import Config
 from ..physics.constants import MESONS, MesonSpec
 from . import samples
 
@@ -174,17 +174,6 @@ def decay_to_radii(spec: MesonSpec, mchi: float, P, rng: np.random.Generator,
 # --------------------------------------------------------------------------
 # Acceptance scan
 # --------------------------------------------------------------------------
-def _hit_fraction(det: DetectorConfig, r: np.ndarray) -> np.ndarray:
-    d = geometry.offaxis_offset_m(det)
-    if det.type == "bar_array":
-        half_w = 0.5 * det.bar_columns * det.bar_size_m
-        half_h = 0.5 * det.bar_rows * det.bar_size_m
-        return geometry.face_hit_fraction(r, d, half_w, half_h)
-    if det.type == "cylindrical":
-        return geometry.circle_hit_fraction(r, d, det.radius_m)
-    raise ValueError(f"unknown detector type {det.type!r}")
-
-
 def compute_acceptance(cfg: Config, meson: str, grid: np.ndarray, *,
                        quick: Optional[bool] = None, verbose: bool = True
                        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -221,8 +210,8 @@ def compute_acceptance(cfg: Config, meson: str, grid: np.ndarray, *,
                                         cfg.detector.distance_m,
                                         cfg.engine.fidelity)
             n_kept[j] += nk
-            f = (np.nan_to_num(_hit_fraction(cfg.detector, r1))
-                 + np.nan_to_num(_hit_fraction(cfg.detector, r2)))
+            f = (np.nan_to_num(geometry.hit_fraction(cfg.detector, r1))
+                 + np.nan_to_num(geometry.hit_fraction(cfg.detector, r2)))
             S1[j] += f.sum()
             cl = f.reshape(repeats, hi - lo).sum(axis=0)
             Sc2[j] += (cl * cl).sum()

@@ -60,6 +60,15 @@ def test_detector_override_flips_geometry_flag(tmp_path):
     assert load_config(p2).geometry_is_preset is True
 
 
+def test_user_dy_cross_replaces_the_builtin_tables(tmp_path):
+    # Your own Drell-Yan scan wins over the per-material tables; a preset's
+    # scan (or a target swap) keeps the tables in force.
+    p = _write(tmp_path, "preset: darkquest\ndata: {dy_cross: my_scan.txt}\n")
+    assert load_config(p).dy_cross_is_preset is False
+    p2 = _write(tmp_path, "preset: darkquest\ntarget: {name: tungsten}\n")
+    assert load_config(p2).dy_cross_is_preset is True
+
+
 def test_needs_source_repo_respects_channels_and_abs_paths(tmp_path):
     cfg = Config(channels=["meson_decay"],
                  data=DataConfig(mass_grid=str(tmp_path / "g.txt"),
@@ -148,3 +157,66 @@ def test_scintillator_inherits_bar_length_from_base_preset(tmp_path):
                           "detector: {bar_length_m: 0.75}\n"
                           "sensitivity: {scintillator: plastic}\n")
     assert load_config(p2).sensitivity.n_gamma == pytest.approx(1.25e5)
+
+
+def test_unknown_top_level_key_raises_with_suggestion(tmp_path):
+    # A misspelled section used to be dropped silently (preset geometry kept).
+    p = _write(tmp_path, "name: t\ndetecor: {distance_m: 50.0}\n")
+    with pytest.raises(ValueError, match="unknown top-level key.*did you mean 'detector'"):
+        load_config(p)
+
+
+def test_channels_validated_and_aliased(tmp_path):
+    p = _write(tmp_path, "name: t\nbeam: {energy_gev: 120.0}\nchannels: [mesons, dy]\n")
+    assert load_config(p).channels == ["meson_decay", "drell_yan"]
+    p2 = _write(tmp_path, "name: t\nbeam: {energy_gev: 120.0}\nchannels: [brems]\n")
+    with pytest.raises(ValueError, match="unknown channel 'brems'.*did you mean 'brem'"):
+        load_config(p2)
+
+
+def test_bar_length_override_rederives_inherited_scintillator(tmp_path):
+    # FLAME derives n_gamma from plastic @ 1.5 m; a shorter bar must follow it.
+    p = _write(tmp_path, "preset: flame\nname: t\ndetector: {bar_length_m: 0.75}\n")
+    assert load_config(p).sensitivity.n_gamma == pytest.approx(1.25e5)
+    # An explicit n_gamma still wins.
+    p2 = _write(tmp_path, "preset: flame\nname: t\ndetector: {bar_length_m: 0.75}\n"
+                          "sensitivity: {n_gamma: 3.0e5}\n")
+    assert load_config(p2).sensitivity.n_gamma == pytest.approx(3.0e5)
+
+
+def test_target_aliases_in_yaml(tmp_path):
+    for alias, name in (("fe", "iron"), ("mo", "molybdenum"), ("tzm", "molybdenum"),
+                        ("w", "tungsten"), ("graphite", "carbon")):
+        p = _write(tmp_path, f"name: t\nbeam: {{energy_gev: 120.0}}\ntarget: {{name: {alias}}}\n")
+        assert load_config(p).target.name == name
+
+
+def test_legacy_fidelity_models_the_published_detector(tmp_path):
+    from dataclasses import replace
+    from mcpsim import geometry, load_preset
+    from mcpsim.config import run_config
+    from mcpsim.model import acceptance_files_valid
+    cfg = load_preset("darkquest")
+    legacy = replace(cfg, engine=replace(cfg.engine, fidelity="legacy"))
+    # default: the 1 x 1 m face, for which the archived files are not valid
+    assert geometry.face_signature(run_config(cfg).detector) == "1 x 1 m face at 40 m"
+    assert not acceptance_files_valid(run_config(cfg))
+    # legacy: the paper's disc and its files
+    assert run_config(legacy).detector == cfg.legacy_detector
+    assert acceptance_files_valid(run_config(legacy))
+    assert run_config(run_config(legacy)) == run_config(legacy)          # idempotent
+    # a config's own detector is kept even under legacy
+    p = _write(tmp_path, "preset: darkquest\nengine: {fidelity: legacy}\n"
+                         "detector: {distance_m: 60.0}\n")
+    own = run_config(load_config(p))
+    assert geometry.face_signature(own.detector) == "1 x 1 m face at 60 m"
+    assert not acceptance_files_valid(own)
+    # presets without a separate published detector are unaffected
+    flame = load_preset("flame")
+    assert flame.legacy_detector is None and acceptance_files_valid(flame)
+
+
+def test_legacy_detector_is_strict(tmp_path):
+    p = _write(tmp_path, "preset: darkquest\nlegacy_detector: {radius: 0.5}\n")
+    with pytest.raises(ValueError, match="legacy_detector"):
+        load_config(p)

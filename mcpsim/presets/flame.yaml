@@ -15,9 +15,12 @@ beam:
   frame: fixed_target
   n_pot: 3.8e20
 
-# Graphite production target (NuMI/LBNF-style). Target material only enters
-# the bremsstrahlung effective luminosity; the PYTHIA meson multiplicities
-# are tabulated per POT independent of material.
+# Graphite production target (NuMI/LBNF-style). In the brem channel the target
+# enters twice: the effective luminosity (rho*lambda/A over one interaction
+# length) and sigma_pA(A) inside the (theta, p) grids. The Brem_120GeV grids
+# were generated for iron (their header says A_Fe), so mcpsim rescales them by
+# sigma_pA(C)/sigma_pA(Fe) = 0.33 and reports it. The PYTHIA meson
+# multiplicities are tabulated per POT independent of material.
 target:
   name: carbon
 
@@ -60,7 +63,9 @@ sensitivity:
 # azimuthal kernel — but the precomputed Brem_120GeV grids use the eVMD form
 # factor WITH the rho/omega resonances (the canonical set), so summing brem
 # with the PYTHIA vector-meson channel double-counts the resonance region.
-# Combine with care.
+# The grids also carry DarkQuest's single-track/shared-bar weight for a 1x1 m
+# face at 40 m, so they are not valid beyond 12.5 mrad off-axis (the 14 mrad
+# brem collapses) and undercount both-chi hits below it. Combine with care.
 channels: [meson_decay]
 
 engine:
@@ -71,3 +76,5 @@ data:
   mass_grid: mship_values.txt
   brem_dir: DarkQuest-brem-backup     # 120 GeV grids; see channels note above
   brem_pattern: "Brem_120GeV_*.txt"
+  brem_max_theta_mrad: 12.5           # DarkQuest face edge, arctan(0.5/40): brem
+                                      # past it (e.g. 14 mrad) is not accurate

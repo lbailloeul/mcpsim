@@ -1,15 +1,17 @@
-"""Limit (exclusion) plot: N_chi = threshold contour in the (m_chi, epsilon) plane.
+"""Limit (exclusion) plots: the eps(m) at which the signal reaches the
+threshold, over the existing constraints.
 
-The signal is the baseline yield broadcast with the light-yield detection factor
-(sensitivity.signal_2d). Existing experimental constraints from
-experiment-contours-small/*.csv are shaded as an envelope, following
-DrawProbability.py.
+Styled after the paper's final figure (plotting-scripts-backup/
+DrawProbability_final_*.py), with the existing constraints kept as one merged
+grey region: every run is a solid curve (all channels) over a dashed lighter
+one without proton brem. plot_limit draws one run, plot_limit_compare several
+(the paper's DarkQuest + SHiP figure), plot_limit_overlay an off-axis scan.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import matplotlib
 
@@ -18,12 +20,10 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from .. import paths  # noqa: E402
-from ..config import Config  # noqa: E402
+from ..config import Config, run_config  # noqa: E402
 from ..model import ProductionResult  # noqa: E402
 from ..physics import sensitivity  # noqa: E402
-
-plt.rcParams["mathtext.fontset"] = "cm"
-plt.rcParams["font.family"] = "serif"
+from .style import family_colors, log_decades, paper_style, pot_tex, save  # noqa: E402
 
 # (filename, label, mass-unit-is-MeV) for the existing-constraint overlays.
 CONSTRAINTS: List[Tuple[str, str, bool]] = [
@@ -36,136 +36,165 @@ CONSTRAINTS: List[Tuple[str, str, bool]] = [
     ("SENSEI_POLISHED.csv", "SENSEI", True),
     ("milliQanRun3Fix.csv", "milliQan", False),
 ]
+# Sequential single-hue ramp for ordered off-axis positions (light -> dark).
+OFFAXIS_RAMP = ["#B3CDE8", "#7FAFDA", "#4E8FC7", "#2A6BAB", "#0F4C81"]
+X_MAX_GEV = 11.2                 # the paper's upper mass edge
+Y_TOP = 2.0
 
-_FAMILY_COLOR = {"darkquest": "#C94F65", "ship": "#0487FF", "lanl": "tomato"}
+
+def limit_curves(cfg: Config, result: ProductionResult):
+    """(eps with all channels, eps without proton brem or None) on the mass grid."""
+    s = cfg.sensitivity
+    charges = sensitivity.charge_grid(s.charge_min, s.charge_max, s.n_charge)
+
+    def eps(total):
+        return sensitivity.exclusion_contour(total, charges, s.n_gamma, s.a, s.n_chi_threshold)
+    brem = result.brem_central
+    no_brem = (eps(result.total - brem)
+               if brem is not None and brem.sum() > 0 else None)
+    return eps(result.total), no_brem
 
 
 def plot_limit(cfg: Config, result: ProductionResult, output: str | Path) -> Path:
-    """Exclusion plot: the eps95(m) boundary over the existing-constraint envelope."""
-    s = cfg.sensitivity
-    charges = sensitivity.charge_grid(s.charge_min, s.charge_max, s.n_charge)
-    eps95 = sensitivity.exclusion_contour(result.total, charges, s.n_gamma, s.a,
-                                          s.n_chi_threshold)
-
-    fig, ax = plt.subplots(figsize=(11, 8), dpi=200)
-    _draw_constraint_envelope(ax)
-
-    color = _FAMILY_COLOR.get(cfg.family, "#C94F65")
-    label = f"{cfg.name}: {cfg.beam.n_pot:.0e} POT"
-    reached = np.isfinite(eps95)
-    if np.any(reached):
-        ax.plot(result.masses[reached], eps95[reached], color=color, lw=3, label=label)
-    else:
-        # Previously ax.contour silently drew nothing here; make it explicit.
-        ax.text(0.5, 0.5, "signal never reaches the exclusion threshold\n"
-                f"(N_chi = {s.n_chi_threshold:g}) anywhere on the grid",
-                transform=ax.transAxes, ha="center", va="center", fontsize=16,
-                color=color)
-        ax.plot([], [], color=color, lw=3, label=label)
-
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel(r"$m_{\chi}$ [$\mathrm{GeV}/\mathrm{c}^2$]", fontsize=22)
-    ax.set_ylabel(r"$\epsilon=Q/e$", fontsize=22)
-    ax.tick_params(axis="both", labelsize=16)
-    ax.set_xlim(max(1e-3, result.masses.min()), result.masses.max())
-    ax.set_ylim(s.charge_min, s.charge_max)
-    ax.legend(loc="upper left", fontsize=16)
-
-    output = Path(output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout()
-    fig.savefig(output, bbox_inches="tight")
-    plt.close(fig)
-    return output
+    """One run over the existing constraints (PDF + PNG). Returns the PDF path."""
+    return plot_limit_compare([(cfg, result)], output)
 
 
-# Sequential single-hue ramp for ordered off-axis positions (light -> dark).
-OFFAXIS_RAMP = ["#B3CDE8", "#7FAFDA", "#4E8FC7", "#2A6BAB", "#0F4C81"]
+def plot_limit_compare(runs: Sequence[Tuple[Config, ProductionResult]],
+                       output: str | Path) -> Path:
+    """Several runs on one exclusion plot, each solid with all channels and
+    dashed without proton brem (the paper's DarkQuest + SHiP figure)."""
+    runs = [(run_config(c), r) for c, r in runs]
+    with paper_style():
+        fig, ax = plt.subplots(figsize=(11, 8))
+        _draw_constraints(ax)
+        used: set = set()
+        reach = []
+        for cfg, result in runs:
+            solid, light = family_colors(cfg.family, used)
+            eps, eps_no_brem = limit_curves(cfg, result)
+            label = f"{cfg.name}: {pot_tex(cfg.beam.n_pot)} POT"
+            if eps_no_brem is not None:
+                _curve(ax, result.masses, eps_no_brem, light, 1.8, (0, (4, 2.5)),
+                       f"{label}, without $p$ brem")
+                label += ", including $p$ brem"
+            ok = _curve(ax, result.masses, eps, solid, 2.4, "-", label)
+            if ok is not None:
+                reach.append(ok)
+        _frame(ax, runs, reach)
+        ax.legend(loc="upper left", fontsize=14, framealpha=1, edgecolor="0.8")
+        fig.tight_layout()
+        return save(fig, output)
 
 
 def plot_limit_overlay(cfg: Config, runs, out_dir: Path) -> Path:
-    """Overlay of eps95(m) exclusion boundaries for an off-axis scan.
+    """eps(m) for an off-axis scan, light to dark with angle, over the
+    constraints, with the view following the curves.
 
-    `runs` is a list of (angle_mrad, cfg_at_angle, ProductionResult); curves
-    are drawn light-to-dark with increasing angle over the existing-constraint
-    envelope, with view ranges following the curves (the envelope would
-    otherwise autoscale to eps = 2)."""
-    fig, ax = plt.subplots(figsize=(9, 6.5), dpi=200)
-    env_m, env_y = _draw_constraint_envelope(ax)
+    `runs` is a list of (angle_mrad, cfg_at_angle, ProductionResult)."""
+    with paper_style():
+        fig, ax = plt.subplots(figsize=(9, 6.5))
+        env_m, env_y = _draw_constraints(ax)
+        colors = (OFFAXIS_RAMP if len(runs) <= len(OFFAXIS_RAMP)
+                  else [plt.get_cmap("Blues")(x) for x in np.linspace(0.35, 0.95, len(runs))])
+        curves = []
+        for color, (angle, cfg_a, result) in zip(colors, runs):
+            eps, _ = limit_curves(cfg_a, result)
+            if _curve(ax, result.masses, eps, color, 2.0, "-", f"{angle:g} mrad off axis") is not None:
+                curves.append((result.masses[np.isfinite(eps)], eps[np.isfinite(eps)]))
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        if curves:
+            xlo = min(c[0].min() for c in curves) * 0.9
+            xhi = max(c[0].max() for c in curves) * 1.25
+            ylo = min(c[1].min() for c in curves)
+            if env_y is not None:
+                win = (env_m >= xlo) & (env_m <= xhi)
+                if np.any(win):
+                    ylo = min(ylo, float(env_y[win].min()))
+            ax.set_xlim(xlo, xhi)
+            ax.set_ylim(ylo * 0.8, max(c[1].max() for c in curves) * 2.2)
+        log_decades(ax, "x")
+        log_decades(ax, "y")
+        ax.set_xlabel(r"$m_{\chi}$ [$\mathrm{GeV}/\mathrm{c}^2$]", fontsize=18)
+        ax.set_ylabel(r"$\epsilon=Q/e$", fontsize=18)
+        ax.legend(frameon=False, loc="upper left", fontsize=12.5)
+        _cl_note(ax, cfg, extra=f"{pot_tex(cfg.beam.n_pot)} POT at "
+                                f"${cfg.beam.energy_gev:g}$ GeV, ${cfg.detector.distance_m:g}$ m")
+        fig.tight_layout()
+        out = Path(out_dir) / f"limit_overlay_{cfg.tag}.pdf"
+        return save(fig, out)
 
-    s = cfg.sensitivity
-    charges = sensitivity.charge_grid(s.charge_min, s.charge_max, s.n_charge)
-    curves = []
-    colors = (OFFAXIS_RAMP if len(runs) <= len(OFFAXIS_RAMP)
-              else [plt.get_cmap("Blues")(x) for x in np.linspace(0.35, 0.95, len(runs))])
-    for color, (angle, cfg_a, result) in zip(colors, runs):
-        eps95 = sensitivity.exclusion_contour(result.total, charges, s.n_gamma,
-                                              s.a, s.n_chi_threshold)
-        m = np.isfinite(eps95)
-        if np.any(m):
-            ax.plot(result.masses[m], eps95[m], color=color, lw=2,
-                    label=f"{angle:g} mrad")
-            curves.append((result.masses[m], eps95[m]))
 
+def _curve(ax, m, eps, color, lw, ls, label) -> Optional[float]:
+    """Draw one eps(m) boundary; returns its last reached mass (None if none)."""
+    ok = np.isfinite(eps)
+    if not np.any(ok):
+        # the signal never reaches the threshold: say so instead of drawing nothing
+        ax.plot([], [], color=color, lw=lw, ls=ls, label=f"{label} (never reaches threshold)")
+        return None
+    ax.plot(m[ok], eps[ok], color=color, lw=lw, ls=ls, label=label, zorder=5)
+    return float(m[ok].max())
+
+
+def _frame(ax, runs, reach: List[float]) -> None:
+    cfg0 = runs[0][0]
+    s = cfg0.sensitivity
+    m_min = min(float(r.masses.min()) for _, r in runs)
+    m_max = max(float(r.masses.max()) for _, r in runs)
+    # the paper's 11.2 GeV edge, or close in on a curve that ends early
+    xhi = min(X_MAX_GEV, m_max * 1.6, 1.5 * max(reach)) if reach else m_max
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel(r"$m_{\chi}$ [GeV]", fontsize=16)
-    ax.set_ylabel(r"$\epsilon=Q/e$", fontsize=16)
-    ax.text(0.97, 0.03, f"{cfg.beam.n_pot:.2g} POT @ {cfg.beam.energy_gev:g} GeV, "
-            f"{cfg.detector.distance_m:g} m", transform=ax.transAxes, ha="right",
-            va="bottom", fontsize=10, color="0.35")
-    if curves:
-        xlo = min(c[0].min() for c in curves) * 0.9
-        xhi = max(c[0].max() for c in curves) * 1.25
-        ylo = min(c[1].min() for c in curves)
-        if env_y is not None:
-            win = (env_m >= xlo) & (env_m <= xhi)
-            if np.any(win):
-                ylo = min(ylo, float(env_y[win].min()))
-        yhi = max(c[1].max() for c in curves) * 2.2
-        ax.set_xlim(xlo, xhi)
-        ax.set_ylim(ylo * 0.8, yhi)
-    ax.legend(frameon=False, loc="upper left", fontsize=11)
-
-    out = Path(out_dir) / f"limit_overlay_{cfg.tag}.pdf"
-    fig.tight_layout()
-    fig.savefig(out, bbox_inches="tight")
-    fig.savefig(out.with_suffix(".png"), dpi=170, bbox_inches="tight")
-    plt.close(fig)
-    return out
+    ax.set_xlim(max(1e-3, m_min), xhi)
+    ax.set_ylim(min(c.sensitivity.charge_min for c, _ in runs), s.charge_max)
+    log_decades(ax, "x")
+    log_decades(ax, "y")
+    ax.set_xlabel(r"$m_{\chi}$ [$\mathrm{GeV}/\mathrm{c}^2$]", fontsize=22)
+    ax.set_ylabel(r"$\epsilon=Q/e$", fontsize=22)
+    ax.tick_params(axis="both", which="major", labelsize=18)
+    _cl_note(ax, cfg0)
 
 
-def _draw_constraint_envelope(ax, y_top: float = 2.0):
-    """Shade the union of existing constraints as a single gray envelope.
+def _cl_note(ax, cfg: Config, extra: str = "") -> None:
+    thr = cfg.sensitivity.n_chi_threshold
+    note = (rf"95% CL, zero background ($N_\chi = {thr:g}$)" if abs(thr - 3.09) < 1e-9
+            else rf"excluded where $N_\chi \geq {thr:g}$ events")
+    if extra:
+        note = f"{extra}\n{note}"
+    ax.text(0.98, 0.03, note, transform=ax.transAxes, ha="right", va="bottom",
+            fontsize=13, color="0.25")
 
-    Returns (m_grid, envelope) — envelope is None when no contour was found —
-    so callers can fold the envelope into their axis ranges."""
-    m_grid = np.logspace(np.log10(1e-3), np.log10(11.3), 800)
+
+def _draw_constraints(ax, y_top: float = Y_TOP):
+    """Shade the union of existing constraints as one grey region. Returns
+    (m_grid, envelope), envelope None when no contour file was found, so
+    callers can fold it into their axis ranges."""
+    m_grid = np.logspace(np.log10(0.0009916136673313), np.log10(11.3), 800)
     env = np.full_like(m_grid, y_top)
     found = False
     contours_dir = paths.contours_dir()
     for fname, _label, is_mev in CONSTRAINTS:
-        path = contours_dir / fname
-        arr = _load_csv(path)
+        arr = _load_csv(contours_dir / fname)
         if arr is None:
             continue
-        found = True
         x, y = arr[:, 0], arr[:, 1]
         if is_mev:
             x = x / 1000.0
         valid = (x > 0) & (y > 0)
         if not np.any(valid):
             continue
+        found = True
         order = np.argsort(x[valid])
         xl, yl = np.log10(x[valid][order]), np.log10(y[valid][order])
         yq = 10 ** np.interp(np.log10(m_grid), xl, yl,
                              left=np.log10(y_top), right=np.log10(y_top))
         env = np.minimum(env, yq)
-    if found:
-        ax.fill_between(m_grid, env, y_top, color="lightgray", alpha=0.7,
-                        label="Existing constraints")
-    return m_grid, (env if found else None)
+    if not found:
+        return m_grid, None
+    ax.fill_between(m_grid, env, y_top, color="lightgray", alpha=0.7,
+                    label="Existing constraints", zorder=1)
+    return m_grid, env
 
 
 def _load_csv(path: Path):

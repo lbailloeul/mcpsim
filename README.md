@@ -12,7 +12,7 @@ Four production channels are combined:
 - meson 2-body decay (ρ, ω, φ, J/ψ, Υ → χχ̄)
 - meson 3-body Dalitz decay (π⁰, η → γχχ̄)
 - proton bremsstrahlung (precomputed eVMD (θ, p) grids)
-- Drell-Yan (qq̄ → γ* → χχ̄, precomputed MadGraph scans)
+- Drell-Yan (qq̄ → γ* → χχ̄)
 
 The Υ is a special case. It is produced too rarely to have an acceptance scan
 of its own, so it borrows the J/ψ's. Its contribution is around 10⁻⁴ of the
@@ -49,11 +49,11 @@ nothing to rearrange.
 **3. Check it worked.**
 
 ```bash
-mcpsim install --check-data      # verifies sha256 for every data file
-mcpsim install --dry-run         # "doctor": data + toolchain status
+mcpsim doctor                    # data location + toolchain status
+mcpsim doctor --check-data       # also verifies sha256 for every data file
 ```
 
-`--check-data` should report `342 ok, 0 missing, 0 corrupt`. The doctor will
+`--check-data` should report `354 ok, 0 missing, 0 corrupt`. The doctor will
 list missing optional toolchains (ROOT, PYTHIA, MPI, MadGraph) — none of those
 are needed for fast mode, which is what the Quick start below uses. See
 [docs/install.md](docs/install.md) for the dependency tiers and troubleshooting.
@@ -64,11 +64,16 @@ are needed for fast mode, which is what the Quick start below uses. See
 mcpsim presets                                  # list built-in experiments
 mcpsim run --preset darkquest                   # production + limit (fast mode)
 mcpsim run --preset flame --offaxis 4,6.5,9     # off-axis scan + overlay plots
+mcpsim run --preset darkquest --target molybdenum  # same setup, SHiP's target material
+mcpsim compare -p darkquest -p ship             # both limits on one figure (the paper's plot)
 mcpsim run --config my_experiment.yaml          # custom beam/target/detector
 ```
 
-Outputs (PDF plots + numeric `.txt` tables) land in
-`mcpsim-output/<experiment-tag>/`.
+Outputs (PDF plots, numeric `.txt` tables, and a `run_<tag>.yaml` record of the
+fully resolved configuration) land in `mcpsim-output/<experiment-tag>/`.
+Physics caveats that apply to a run (borrowed acceptances, approximate
+channels, validity limits) are printed as `!` lines at the end; the full list
+is in [docs/physics.md](docs/physics.md#known-physics-caveats).
 
 ## The two decay engines
 
@@ -100,11 +105,19 @@ Physics fidelity (`--fidelity`):
 
 - **corrected** (default) — physically-correct samplers and constants.
 - **legacy** — reproduces the published pipeline (the 3.14-vs-π Dalitz
-  constant, the legacy sampler quirks, the cone-cut brem acceptance).
+  constant, the legacy sampler quirks, the cone-cut brem acceptance, the
+  paper's iron Drell-Yan scans and 13 mb normalisation for every target, and
+  the paper's r = 0.5 m disc for DarkQuest and SHiP, which otherwise model a
+  1×1 m face).
   `pytest -m golden` enforces this against frozen tables.
 
-The corrected−legacy differences are small: +0.05% on Dalitz yields, ≤±8% on
-Dalitz acceptance, ≲1% on ε. Each one is quantified in the fidelity table in
+The corrected−legacy differences are modest on the limits:
+- **Dalitz:** +0.05% on yields, ≤±8% on acceptance, ≲1% on ε.
+- **1×1 m face:** meson acceptance +17–33%, ε 1–3%.
+- **Drell-Yan** (per-material tables, normalisation and the face): DY yield
+  ×1.2–1.6, ε up to 10–13% where Drell-Yan dominates.
+
+Each one is quantified in the fidelity table in
 [docs/physics.md](docs/physics.md).
 
 ## Compute modes

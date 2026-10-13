@@ -10,7 +10,7 @@ from mcpsim.generation.madgraph import MCP_PDG_DEFAULT, parse_lhe_acceptance
 
 _SOURCE_REPO_PRESENT = paths.source_repo().exists()
 
-# Two-event LHE: one mCP forward (accepted), one mCP at wide angle (rejected).
+# Two-event LHE: a forward pair (both chi on the face), a wide-angle pair (none).
 _LHE = f"""\
 <LesHouchesEvents version="3.0">
 <init>
@@ -36,10 +36,10 @@ _LHE = f"""\
 def test_parse_lhe_acceptance(tmp_path):
     lhe = tmp_path / "events.lhe"
     lhe.write_text(_LHE)
-    cfg = load_preset("darkquest")  # cylindrical, theta_cut = arctan(0.5/40)
-    n_total, n_accepted = parse_lhe_acceptance(lhe, MCP_PDG_DEFAULT, cfg)
+    cfg = load_preset("darkquest")  # 1 x 1 m face at 40 m
+    n_total, n_hits = parse_lhe_acceptance(lhe, MCP_PDG_DEFAULT, cfg)
     assert n_total == 2
-    assert n_accepted == 1  # only the forward event is inside the aperture
+    assert n_hits == 2  # both chi of the forward pair; per-chi acceptance 2 / (2 * 2)
 
 
 @pytest.mark.skipif(not _SOURCE_REPO_PRESENT, reason="source repo (mCP_brem.py) unavailable")
@@ -53,6 +53,10 @@ def test_brem_patcher_rewrites_globals(tmp_path):
     assert "95.95" in text                           # molybdenum A
     # sqrt(s) recomputed for 400 GeV, no longer the 15.06 GeV default.
     assert "15.06)**2" not in text and "15.06**2" not in text
+    # The output header names the nucleus sigma_pA used, so the readers do not
+    # rescale the regenerated grids by the hard-coded iron A.
+    assert '"A_target = 95.95 g/mol' in text
+    assert '"A_Fe = 55.845 g/mol' not in text
 
 
 def test_meson_backend_dispatch():

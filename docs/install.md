@@ -36,7 +36,7 @@ The tree holds **data only**. Every generator and decay source mcpsim runs is
 shipped inside the package (`mcpsim/legacy/`), so tiers 3-4 need the external
 toolchains but no extra sources.
 
-Verify a machine's copy with `mcpsim install --check-data`, which checks
+Verify a machine's copy with `mcpsim doctor --check-data`, which checks
 sha256 for every file against `data/MANIFEST.yaml`.
 
 ### Public data records (Zenodo)
@@ -49,7 +49,7 @@ the layout mcpsim expects:
 ```bash
 unzip data.zip -d ~/mcpsim-data
 export MCPSIM_SOURCE_REPO=~/mcpsim-data
-mcpsim install --check-data          # 354 ok, 0 missing, 0 corrupt
+mcpsim doctor --check-data           # 354 ok, 0 missing, 0 corrupt
 ```
 
 Nothing needs rearranging, and nothing is missing — the mass grids, contour
@@ -70,7 +70,7 @@ if you regenerate Drell-Yan against the original model (see docs/physics.md).
 ## The doctor
 
 ```bash
-mcpsim install --dry-run
+mcpsim doctor            # (same report as `mcpsim install --dry-run`)
 ```
 
 reports: importable Python modules, how the source repo resolved (and whether
@@ -96,11 +96,12 @@ a scan of your conda envs for ones that carry them.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `Source repo not found at ...` | data tree missing/mislocated | set `MCPSIM_SOURCE_REPO` to your bundle/checkout |
-| `mass grid ... not found` | partial data tree | `mcpsim install --check-data` to see what's missing |
+| `Data not found at ...` | data bundle missing/mislocated | download data.zip (Zenodo), unzip, set `MCPSIM_SOURCE_REPO` to it |
+| `mass grid ... not found` | partial data tree | `mcpsim doctor --check-data` to see what's missing |
 | `no brem files matched ...` warning | brem grids absent for this energy | install the brem set, or `--channels meson_decay` |
 | `acceptance uses the PRESET-geometry file` warning | custom geometry but no PYTHIA samples | install the sample bundle (tier 2) or accept the approximation |
 | `archived ... samples were generated at 120 GeV` | non-120 GeV beam with the python engine | generate fresh samples (tier 3) and set `engine.samples_dir` |
-| `'root-config' not found` | ROOT not sourced | activate the conda env / LCG view that has it (`mcpsim install` lists candidates) |
+| `'root-config' not found` | ROOT not sourced | activate the conda env / LCG view that has it (`mcpsim doctor` lists candidates) |
 | `Generation step '...' produced no outputs` (exit 1) | missing toolchain — the reasons are in the yellow warnings above it | install the tool or use the python engine |
 | empty plots + `no channel produced any yield` | all channels skipped (check warnings) | fix the data paths listed in the warnings |
+| `the limit hits the bottom of the charge scan` | signal already above threshold at `charge_min` | lower `sensitivity.charge_min`; the tabulated value is only a floor |

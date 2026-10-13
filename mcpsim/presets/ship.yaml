@@ -2,29 +2,45 @@ name: SHiP
 family: ship           # selects the legacy flat upsilon acceptance + plot styling
 
 # SHiP at the CERN SPS: 400 GeV protons on the TZM (titanium-zirconium-doped
-# molybdenum) target/dump; a cylindrical mCP detector ~100 m downstream,
-# 0.5 m radius, on-axis. 2e20 POT = 5 nominal years (pbrem paper).
+# molybdenum) target/dump; a 1 x 1 m mCP detector face ~100 m downstream,
+# on-axis. 2e20 POT = 5 nominal years (pbrem paper).
 beam:
   energy_gev: 400.0
   frame: fixed_target
   n_pot: 2.0e20
 
-# Material enters the brem effective luminosity only (four interaction
-# lengths of TZM; grids' headers record rho = 10.2, A = 95.95, L = 15.27 cm).
+# SHiP target: TZM (Ti-Zr-doped molybdenum) for the first ~4 interaction
+# lengths, then tungsten. Production is counted in the first interaction
+# length, i.e. in the TZM (grids' headers record rho = 10.2, A = 95.95,
+# L = 15.27 cm). Material enters brem (luminosity + sigma_pA rescale) and
+# Drell-Yan (the per-material cross-section table + per-nucleon
+# normalisation); `--target tungsten` brackets the W.
 target:
   name: molybdenum
 
-# The acceptance files below were generated FOR THIS GEOMETRY (100 m, 0.5 m).
-# Overriding `detector:` in an inheriting config triggers recomputation by
-# the Python engine — but NOTE: the archived PYTHIA parent samples are
-# 120 GeV, so at 400 GeV the engine refuses and you need fresh samples
-# (`mcpsim generate mesons --engine cpp`, requires PYTHIA).
+# As for DarkQuest: a 1 x 1 m face of 20 x 20 plastic bars, the layout the
+# brem grids were generated for. Meson acceptance is computed for it from the
+# archived 400 GeV PYTHIA samples (~2.5 min on the first run, then cached);
+# Drell-Yan uses the tables' LO acceptance of this face. The bar length feeds
+# only n_gamma, not the acceptance.
 detector:
+  type: bar_array
+  distance_m: 100.0
+  bar_columns: 20
+  bar_rows: 20
+  bar_layers: 3
+  bar_size_m: 0.05
+  bar_length_m: 1.5
+  face_mode: rectangular
+
+# The published analysis: an r = 0.5 m disc at 100 m, which the archived meson
+# acceptance files below are for (the Drell-Yan file only from 7.4 GeV; below
+# that it matches a 1 m^2 face, see docs/physics.md). `fidelity: legacy`
+# models this detector, so it reproduces the paper.
+legacy_detector:
   type: cylindrical
   distance_m: 100.0
   radius_m: 0.5
-  # As for DarkQuest: the cylinder is the acceptance envelope, the detector is
-  # plastic bars, and this length feeds only n_gamma, not the acceptance.
   bar_length_m: 1.5
 
 # Same detection model as DarkQuest: P = (1 - exp(-n_gamma eps^2))^a eps^2,
@@ -49,16 +65,24 @@ data:
   # same double-counting caution vs the PYTHIA vector mesons as DarkQuest.
   brem_dir: SHiP-brem-backup
   brem_pattern: "Brem_400GeV_*.txt"
-  # KNOWN INCONSISTENCIES (flagged by the dev-level DY audit, unresolved —
-  # generating cards were not preserved): the files are tagged '_iron'
-  # although this preset's target is molybdenum (iron nPDF approximation or
-  # mislabel), and the pair mixes 'nCTEQ15' / 'nCTEQ' tags. Both files carry
-  # 258 rows and are correctly row-aligned.
+  # As for DarkQuest: the grids resolve this 1 x 1 m face only out to its
+  # half-width (arctan(0.5/100) = 5 mrad); the corners (to 7.1 mrad) are
+  # missing and any face reaching beyond 5 mrad is warned.
+  brem_max_theta_mrad: 5.0
+  # Drell-Yan cross sections: by default the built-in molybdenum table at
+  # 400 GeV (see the DarkQuest preset). The '_iron' scan below is the paper's:
+  # it used iron nuclear PDFs for DarkQuest and SHiP alike (an approximation,
+  # confirmed by the authors) and is kept for `fidelity: legacy`, which also
+  # keeps the iron per-POT normalisation. The pair mixes 'nCTEQ15' / 'nCTEQ'
+  # tags (assumed the same set); both files carry 258 rows, row-aligned.
   dy_cross: dy_cross_ship_nCTEQ15_iron.txt
   dy_ageo: ageo_ship_nCTEQ_iron.txt
-  # Legacy efficiency scans for THIS geometry. The pi0/eta files are the
-  # "-1m-small" run variants, the vector mesons the plain "-SHIP" runs —
-  # historical run names, see docs/data.md. Upsilon: flat 0.011338 via family.
+  dy_material: iron
+  # Legacy efficiency scans for the legacy_detector (r = 0.5 m disc at 100 m;
+  # checked by recomputing them). The pi0/eta files are the "-1m-small" run
+  # variants ("1m" = 1 m across), the vector mesons the plain "-SHIP" runs —
+  # historical run names, see docs/data.md. Upsilon: borrows this run's J/psi
+  # acceptance (0.011338 for the disc) via family.
   acceptance:
     pi0: total_efficiency_outputdecayPion_SHIP-1m-small.txt
     eta: total_efficiency_outputdecayEta_SHIP-1m-small.txt

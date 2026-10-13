@@ -1,6 +1,7 @@
 """mcpsim command-line interface.
 
     mcpsim presets                       list built-in experiment presets
+    mcpsim doctor [--check-data]         environment + data status
     mcpsim run --preset darkquest        production + limit plots (fast mode)
     mcpsim run --config my.yaml          custom beam/target/detector
     mcpsim run --config my.yaml --regenerate   full PYTHIA/VEGAS/MadGraph
@@ -10,17 +11,23 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Sequence
 
 import click
 
 from . import paths
-from .config import Config, list_presets, load_config, load_preset
+from .config import (Config, TargetConfig, list_presets, load_config, load_preset, run_config,
+                     normalize_channels, normalize_target)
 
 
 def _resolve(preset: Optional[str], config: Optional[str]) -> Config:
     """Load the config and verify the data source repo before any compute."""
+    if preset and config:
+        raise click.UsageError(
+            "give either --preset or --config, not both (a config chooses its "
+            "base preset with a `preset:` key).")
     if config:
         if not Path(config).exists():
             raise click.UsageError(f"config file not found: {config}")
@@ -57,6 +64,15 @@ class _clean_errors:
         return False
 
 
+def _options(*opts):
+    """Decorator applying click options in the order listed."""
+    def deco(func):
+        for opt in reversed(opts):
+            func = opt(func)
+        return func
+    return deco
+
+
 _common = [
     click.option("--preset", "-p", default=None, help="Built-in preset name (see `mcpsim presets`)."),
     click.option("--config", "-c", default=None, help="Path to a YAML config."),
@@ -65,7 +81,12 @@ _common = [
 ]
 
 _channels_opt = click.option("--channels", default=None,
-                             help="Comma-separated subset of: meson_decay,brem,drell_yan.")
+                             help="Comma-separated subset of: meson_decay,brem,drell_yan "
+                                  "(aliases: mesons, dy).")
+
+_offaxis_opt = click.option("--offaxis", default=None,
+                            help="Off-axis angle(s) in mrad, comma-separated (e.g. '4,6.5,9'); "
+                                 "one run per angle, plus overlay plots for several.")
 
 _engine_opts = [
     click.option("--engine", type=click.Choice(["python", "cpp"]), default=None,
@@ -78,24 +99,27 @@ _engine_opts = [
     click.option("--ngamma", type=float, default=None,
                  help="Override sensitivity.n_gamma (photoelectrons at eps = 1); "
                       "e.g. compare light-yield assumptions without editing the config."),
+    click.option("--target", default=None,
+                 help="Swap the target material: iron (DarkQuest), molybdenum (SHiP), "
+                      "tungsten, carbon (graphite); aliases fe, mo, tzm, w, c, graphite. "
+                      "Changes brem and the Drell-Yan cross sections (per-material "
+                      "tables); meson rates are per POT."),
 ]
 
 
-def _add_options(func):
-    for opt in reversed(_common):
-        func = opt(func)
-    return func
-
-
-def _add_engine_options(func):
-    for opt in reversed(_engine_opts):
-        func = opt(func)
-    return func
-
-
-def _apply_engine(cfg: Config, engine, fidelity, seed, quick, ngamma=None) -> Config:
-    """Overlay CLI engine/sensitivity flags onto the config."""
-    from dataclasses import replace
+def _apply_engine(cfg: Config, engine, fidelity, seed, quick, ngamma=None,
+                  target=None) -> Config:
+    """Overlay CLI engine/sensitivity/target flags onto the config."""
+    if target is not None:
+        try:
+            name = normalize_target(target)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="--target")
+        if name != cfg.target.name:
+            # Own name -> own output directory (darkquest_molybdenum/), so a
+            # material swap never overwrites the preset's run.
+            cfg = replace(cfg, name=f"{cfg.name} {name}",
+                          target=TargetConfig.from_dict({"name": name}))
     eng = cfg.engine
     if engine is not None:
         eng = replace(eng, decay=engine)
@@ -109,7 +133,11 @@ def _apply_engine(cfg: Config, engine, fidelity, seed, quick, ngamma=None) -> Co
         cfg = replace(cfg, engine=eng)
     if ngamma is not None:
         cfg = replace(cfg, sensitivity=replace(cfg.sensitivity, n_gamma=ngamma))
-    return cfg
+    if cfg.engine.fidelity == "legacy" and "legacy" not in cfg.name.lower():
+        # own name -> own output directory (darkquest_legacy/), so a legacy run
+        # never overwrites the default one, and its plots say what they are
+        cfg = replace(cfg, name=f"{cfg.name} legacy")
+    return run_config(cfg)        # legacy on a preset -> the published detector
 
 
 def _with_offaxis(cfg: Config, angle_mrad: float) -> Config:
@@ -118,7 +146,6 @@ def _with_offaxis(cfg: Config, angle_mrad: float) -> Config:
     Always renames (so scan outputs land in per-angle directories, even for
     the angle matching the config default) and always recomputes acceptance —
     an explicit --offaxis request opts into the off-axis machinery."""
-    from dataclasses import replace
     return replace(
         cfg,
         name=f"{cfg.name} {angle_mrad:g}mrad",
@@ -148,7 +175,6 @@ def install_cmd(extras: str, dry_run: bool, check_data: bool) -> None:
     reported, with a scan of conda environments for convenience. Also reports
     how the data source repo resolves — the most common first-run problem.
     """
-    import os
     import subprocess
     import sys
 
@@ -167,6 +193,23 @@ def install_cmd(extras: str, dry_run: bool, check_data: bool) -> None:
         click.secho("not a source checkout (no pyproject.toml next to the package); "
                     "skipping pip install — run `pip install 'mcpsim[gen,dev]'` "
                     "or install from a git checkout instead.", fg="yellow")
+    _doctor_report()
+
+
+@cli.command("doctor")
+@click.option("--check-data", is_flag=True,
+              help="Also verify every data file against data/MANIFEST.yaml (sha256).")
+def doctor_cmd(check_data: bool) -> None:
+    """Report what this machine can run: Python modules, where the data
+    resolves, the Drell-Yan UFO model, and the external toolchains."""
+    _doctor_report()
+    if check_data:
+        click.echo("")
+        raise SystemExit(_check_data())
+
+
+def _doctor_report() -> None:
+    import os
 
     click.echo("\nPython modules:")
     for mod in ("numpy", "scipy", "matplotlib", "yaml", "click", "uproot",
@@ -182,9 +225,9 @@ def install_cmd(extras: str, dry_run: bool, check_data: bool) -> None:
     if repo.exists():
         click.secho(f"  OK  resolved via {how}", fg="green")
     else:
-        click.secho(f"  NO  resolved via {how} — does not exist. Set "
-                    f"MCPSIM_SOURCE_REPO to your github-repo-scripts checkout "
-                    f"or data bundle.", fg="red")
+        click.secho(f"  NO  resolved via {how} — does not exist. Download data.zip "
+                    f"from https://doi.org/10.5281/zenodo.22690080, unzip it, and "
+                    f"set MCPSIM_SOURCE_REPO to that folder.", fg="red")
 
     model = os.environ.get("MCPSIM_MCP_MODEL")
     click.echo("\nDrell-Yan UFO model (MCPSIM_MCP_MODEL):")
@@ -306,16 +349,44 @@ def presets_cmd() -> None:
                    f"{cfg.target.name:11s}  {cfg.detector.type:11s}  {cfg.name}")
 
 
+def _execute(cfg: Config, *, out, channels, offaxis, plots: Sequence[str],
+             regenerate: bool = False, mass_subset=None, gen_opts=None) -> None:
+    """Shared body of run / production / limit: one pipeline run, or one per
+    --offaxis angle plus overlay figures when there are several."""
+    from .pipeline import run_pipeline
+    if channels:
+        cfg = replace(cfg, channels=_split(channels))
+    try:
+        angles = [float(x) for x in offaxis.split(",")] if offaxis else []
+    except ValueError:
+        raise click.BadParameter(f"expected comma-separated numbers, got {offaxis!r}",
+                                 param_hint="--offaxis")
+
+    runs = []
+    for cfg_a in ([_with_offaxis(cfg, a) for a in angles] or [cfg]):
+        sub = out and (f"{out}/{cfg_a.tag}" if len(angles) > 1 else out)
+        with _clean_errors():
+            result, written = run_pipeline(cfg_a, regenerate=regenerate, out_dir=sub,
+                                           mass_subset=mass_subset, gen_opts=gen_opts,
+                                           plots=plots)
+        _report(cfg_a, written, result.warnings)
+        runs.append((cfg_a.detector.offaxis_mrad, cfg_a, result))
+
+    if len(runs) > 1:
+        from .plotting.limits import plot_limit_overlay
+        from .plotting.production import plot_production_overlay
+        base_dir = Path(out).resolve() if out else paths.WORK_DIR / cfg.tag
+        base_dir.mkdir(parents=True, exist_ok=True)
+        overlays = {"production": plot_production_overlay, "limit": plot_limit_overlay}
+        for name in plots:
+            click.echo(f"  wrote {overlays[name](cfg, runs, base_dir)}")
+
+
 @cli.command("run")
-@_add_options
-@_channels_opt
-@_add_engine_options
-@click.option("--offaxis", default=None,
-              help="Comma-separated off-axis angles in mrad (e.g. '4,6.5,9'); "
-                   "one run per angle plus overlay plots.")
+@_options(*_common, _channels_opt, *_engine_opts, _offaxis_opt)
 @click.option("--regenerate", is_flag=True,
               help="Run full event generation (needs the ROOT/PYTHIA/MPI/MadGraph "
-                   "toolchains; check with `mcpsim install --dry-run`).")
+                   "toolchains; check with `mcpsim doctor`).")
 @click.option("--mass-subset", type=int, default=None,
               help="With --regenerate: thin the mass grid to ~N points (smoke test).")
 @click.option("--condor", is_flag=True,
@@ -323,111 +394,84 @@ def presets_cmd() -> None:
 @click.option("--no-submit", is_flag=True,
               help="With --condor, write the bundle but do not call condor_submit.")
 def run_cmd(preset, config, out, channels, engine, fidelity, seed, quick, ngamma,
-            offaxis, regenerate, mass_subset, condor, no_submit) -> None:
+            target, offaxis, regenerate, mass_subset, condor, no_submit) -> None:
     """Compute and plot both the production and limit plots.
 
-    Outputs (plots + numeric tables) land in mcpsim-output/<experiment-tag>/
-    unless --out is given. With --offaxis a,b,c the run repeats per angle and
-    overlay figures comparing the positions are added.
+    Outputs (plots, numeric tables and a run_<tag>.yaml record of the resolved
+    configuration) land in mcpsim-output/<experiment-tag>/ unless --out is
+    given. With --offaxis a,b,c the run repeats per angle and overlay figures
+    comparing the positions are added.
     """
-    from .pipeline import run_pipeline
     if mass_subset and not (regenerate or condor):
         raise click.UsageError("--mass-subset only applies with --regenerate/--condor "
                                "(fast mode always uses the full mass grid).")
     if no_submit and not condor:
         raise click.UsageError("--no-submit only applies with --condor.")
-    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma)
-    gen_opts = {"condor": True, "submit": not no_submit} if condor else None
-
-    angles = [float(x) for x in offaxis.split(",")] if offaxis else None
-    if not angles:
-        with _clean_errors():
-            result, plots = run_pipeline(
-            cfg, regenerate=regenerate or condor,
-            channels=_split(channels), out_dir=out, mass_subset=mass_subset,
-            gen_opts=gen_opts,
-        )
-        _report(cfg, plots, result.warnings)
-        return
-
-    runs = []
-    for a in angles:
-        cfg_a = _with_offaxis(cfg, a)
-        with _clean_errors():
-            result, plots = run_pipeline(
-            cfg_a, regenerate=regenerate or condor,
-            channels=_split(channels), out_dir=out and f"{out}/{cfg_a.tag}",
-            mass_subset=mass_subset, gen_opts=gen_opts,
-        )
-        _report(cfg_a, plots, result.warnings)
-        runs.append((a, cfg_a, result))
-
-    if len(runs) > 1:
-        from .plotting.limits import plot_limit_overlay
-        from .plotting.production import plot_production_overlay
-        base_dir = Path(out).resolve() if out else paths.WORK_DIR / cfg.tag
-        base_dir.mkdir(parents=True, exist_ok=True)
-        for fn in (plot_production_overlay, plot_limit_overlay):
-            p = fn(cfg, runs, base_dir)
-            click.echo(f"  wrote {p}")
+    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
+    _execute(cfg, out=out, channels=channels, offaxis=offaxis,
+             plots=("production", "limit"), regenerate=regenerate or condor,
+             mass_subset=mass_subset,
+             gen_opts={"condor": True, "submit": not no_submit} if condor else None)
 
 
 @cli.command("production")
-@_add_options
-@_channels_opt
-@_add_engine_options
-@click.option("--offaxis", type=float, default=None,
-              help="Single off-axis angle in mrad (use `run --offaxis a,b,c` for scans).")
+@_options(*_common, _channels_opt, *_engine_opts, _offaxis_opt)
 def production_cmd(preset, config, out, channels, engine, fidelity, seed, quick,
-                   ngamma, offaxis) -> None:
+                   ngamma, target, offaxis) -> None:
     """Compute and plot only the production plot."""
-    from .model import compute_production
-    from .plotting.production import plot_production
-    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma)
-    if offaxis is not None:
-        cfg = _with_offaxis(cfg, offaxis)
-    if channels:
-        from dataclasses import replace
-        cfg = replace(cfg, channels=_split(channels))
-    with _clean_errors():
-        result = compute_production(cfg)
-    out_dir = Path(out).resolve() if out else paths.WORK_DIR / cfg.tag
-    from .pipeline import write_tables
-    tables = write_tables(cfg, result, out_dir)
-    path = plot_production(cfg, result, out_dir / f"production_{cfg.tag}.pdf")
-    _report(cfg, [path, *tables], result.warnings)
+    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
+    _execute(cfg, out=out, channels=channels, offaxis=offaxis, plots=("production",))
 
 
 @cli.command("limit")
-@_add_options
-@_channels_opt
-@_add_engine_options
-@click.option("--offaxis", type=float, default=None,
-              help="Single off-axis angle in mrad (use `run --offaxis a,b,c` for scans).")
+@_options(*_common, _channels_opt, *_engine_opts, _offaxis_opt)
 def limit_cmd(preset, config, out, channels, engine, fidelity, seed, quick,
-              ngamma, offaxis) -> None:
+              ngamma, target, offaxis) -> None:
     """Compute and plot only the limit (exclusion) plot."""
+    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
+    _execute(cfg, out=out, channels=channels, offaxis=offaxis, plots=("limit",))
+
+
+@cli.command("compare")
+@click.option("--preset", "-p", "presets", multiple=True,
+              help="A preset to include; repeat it (-p darkquest -p ship).")
+@click.option("--config", "-c", "configs", multiple=True,
+              help="A YAML config to include; repeatable, mixes with --preset.")
+@click.option("--out", "-o", "out", default=None,
+              help="Output directory [default: mcpsim-output/compare/].")
+@_options(_channels_opt, *_engine_opts)
+def compare_cmd(presets, configs, out, channels, engine, fidelity, seed, quick,
+                ngamma, target) -> None:
+    """Overlay the limits of several runs on one figure.
+
+    Each run is drawn solid with all channels and dashed without proton brem
+    (the paper's DarkQuest + SHiP figure: -p darkquest -p ship). The tables,
+    limit curve file and run record of every run are written next to it."""
     from .model import compute_production
-    from .plotting.limits import plot_limit
-    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma)
-    if offaxis is not None:
-        cfg = _with_offaxis(cfg, offaxis)
-    if channels:
-        from dataclasses import replace
-        cfg = replace(cfg, channels=_split(channels))
-    with _clean_errors():
-        result = compute_production(cfg)
-    out_dir = Path(out).resolve() if out else paths.WORK_DIR / cfg.tag
     from .pipeline import write_tables
-    tables = write_tables(cfg, result, out_dir)
-    path = plot_limit(cfg, result, out_dir / f"limit_{cfg.tag}.pdf")
-    _report(cfg, [path, *tables], result.warnings)
+    from .plotting.limits import plot_limit_compare
+    sources = [(p, None) for p in presets] + [(None, c) for c in configs]
+    if not sources:
+        raise click.UsageError("give at least one --preset or --config to compare.")
+    out_dir = Path(out).resolve() if out else paths.WORK_DIR / "compare"
+    runs = []
+    for preset, config in sources:
+        cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick,
+                            ngamma, target)
+        if channels:
+            cfg = replace(cfg, channels=_split(channels))
+        with _clean_errors():
+            result = compute_production(cfg)
+            written = write_tables(cfg, result, out_dir)
+        _report(cfg, written, result.warnings)
+        runs.append((cfg, result))
+    name = "_vs_".join(c.tag for c, _ in runs)
+    click.echo(f"  wrote {plot_limit_compare(runs, out_dir / f'limit_compare_{name}.pdf')}")
 
 
 @cli.command("generate")
 @click.argument("step", type=click.Choice(["mesons", "brem", "dy"]))
-@_add_options
-@_add_engine_options
+@_options(*_common, *_engine_opts)
 @click.option("--mass-subset", type=int, default=None, help="Use only N masses.")
 @click.option("--trials", type=int, default=None, help="Meson-generation trials.")
 @click.option("--n-proc", type=int, default=4, help="MPI ranks for brem (per job under --condor).")
@@ -439,7 +483,7 @@ def limit_cmd(preset, config, out, channels, engine, fidelity, seed, quick,
 @click.option("--no-submit", is_flag=True,
               help="With --condor, write the bundle but do not call condor_submit.")
 def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
-                 ngamma, mass_subset, trials, n_proc, brem_grid_size, brem_neval,
+                 ngamma, target, mass_subset, trials, n_proc, brem_grid_size, brem_neval,
                  brem_nitn, condor, no_submit) -> None:
     """Run a single heavy generation step (mesons / brem / dy).
 
@@ -449,10 +493,9 @@ def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
     from .pipeline import regenerate_inputs
     if no_submit and not condor:
         raise click.UsageError("--no-submit only applies with --condor.")
-    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma)
+    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
     # Restrict to the one requested channel so only that backend runs.
-    from dataclasses import replace
-    channel = {"mesons": "meson_decay", "brem": "brem", "dy": "drell_yan"}[step]
+    channel = normalize_channels([step])[0]
     cfg = replace(cfg, channels=[channel])
     gen_dir = ((Path(out).resolve() if out else paths.WORK_DIR / cfg.tag) / "generated")
     gen_opts = {k: v for k, v in dict(
@@ -480,22 +523,27 @@ def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
         raise SystemExit(1)
 
     click.echo(f"Generation step '{step}' complete. Outputs under: {gen_dir}")
-    if channel == "brem" and new_cfg.data.brem_dir:
-        click.echo(f"  brem_dir = {new_cfg.data.brem_dir}")
-    if channel == "drell_yan" and new_cfg.data.dy_cross:
-        click.echo(f"  dy_cross = {new_cfg.data.dy_cross}")
-    if channel == "meson_decay":
-        for k, v in new_cfg.data.acceptance.items():
-            click.echo(f"  acceptance[{k}] = {v}")
+    # Ready-to-paste `data:` block so the outputs can be used by `mcpsim run`.
+    d = new_cfg.data
+    lines = {"brem": [f"  brem_dir: {d.brem_dir}", f"  brem_pattern: \"{d.brem_pattern}\""],
+             "drell_yan": [f"  dy_cross: {d.dy_cross}", f"  dy_ageo: {d.dy_ageo}"],
+             "meson_decay": ["  acceptance:"] + [f"    {k}: {v}" for k, v in d.acceptance.items()],
+             }[channel]
+    click.echo("Use them in a run by adding to your config:\ndata:\n" + "\n".join(lines))
 
 
-def _split(channels: Optional[str]):
-    return [c.strip() for c in channels.split(",")] if channels else None
+def _split(channels: Optional[str]) -> Optional[List[str]]:
+    if not channels:
+        return None
+    try:
+        return normalize_channels(channels.split(","))
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="--channels")
 
 
 def _report(cfg: Config, plots, warnings=None) -> None:
     click.echo(f"[{cfg.name}] {cfg.beam.energy_gev:g} GeV {cfg.beam.frame}, "
-               f"{cfg.detector.type}, channels={cfg.channels}")
+               f"{cfg.target.name} target, {cfg.detector.type}, channels={cfg.channels}")
     for w in (warnings or []):
         click.secho(f"  ! {w}", fg="yellow")
     for p in plots:

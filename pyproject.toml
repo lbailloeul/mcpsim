@@ -12,7 +12,7 @@ authors = [{ name = "Leo Bailloeul" }]
 dependencies = [
     "numpy>=1.21",
     "scipy>=1.7",
-    "matplotlib>=3.5",
+    "matplotlib>=3.6",
     "pyyaml>=6.0",
     "click>=8.0",
     "uproot>=5.0",
@@ -33,7 +33,7 @@ packages = ["mcpsim", "mcpsim.physics", "mcpsim.generation", "mcpsim.plotting", 
 version = { attr = "mcpsim.__version__" }
 
 [tool.setuptools.package-data]
-mcpsim = ["presets/*.yaml", "py.typed", "legacy/*"]
+mcpsim = ["presets/*.yaml", "py.typed", "legacy/*", "data/drell_yan/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

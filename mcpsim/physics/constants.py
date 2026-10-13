@@ -12,13 +12,20 @@ from typing import Dict
 
 # -- Fundamental constants --------------------------------------------------
 ALPHA_EM = 1.0 / 137.0
+# alpha in the Drell-Yan cross sections: the MadGraph UFO value (aEWM1 =
+# 127.9, i.e. alpha(M_Z)) the archived scans were generated with. The built-in
+# tables keep it so that they differ from the paper in the PDFs only; alpha at
+# the DY scale (~1/133) would lower every DY rate by ~8%.
+ALPHA_EM_DY = 1.0 / 127.9
 M_PROTON = 0.9383          # GeV
 M_ELECTRON = 0.00051       # GeV
 N_AVOGADRO = 6.02214076e23  # /mol
 PB_TO_CM2 = 1.0e-36        # 1 pb in cm^2
 
-# Total inelastic proton-nucleon cross section normalising the Drell-Yan
-# probability per interaction: N = N_POT * sigma_DY / sigma_inel * ageo.
+# Normalises the per-nucleon Drell-Yan cross section: N = N_POT * sigma_DY /
+# sigma_inel * ageo. 13 mb matches sigma_inel(p-Fe)/A = 702 mb / 55.8, the
+# per-nucleon share of the IRON interaction cross section (not the ~30 mb pp
+# value); for Mo it would be ~10.7 mb, for carbon ~19 mb. Kept for parity.
 # The legacy scripts encoded this as sigma_pb*1e-12 / 13e-3 — dimensionally
 # mislabeled ("pb -> cm^2" over a "pb-scale" total) but numerically identical
 # to sigma_pb / (13 mb in pb); see physics/drellyan.py and docs/physics.md.
@@ -139,7 +146,10 @@ TARGET_MATERIALS: Dict[str, TargetMaterial] = {
     "iron": TargetMaterial("iron", 26, 55.845, 7.87, 16.8),
     "molybdenum": TargetMaterial("molybdenum", 42, 95.95, 10.2, 15.27),
     "tungsten": TargetMaterial("tungsten", 74, 183.84, 19.3, 9.95),
-    "carbon": TargetMaterial("carbon", 6, 12.011, 2.0, 38.1),
+    # PDG graphite: lambda_I = 85.8 g/cm^2 = 38.83 cm at 2.21 g/cm^3. Only
+    # rho*lambda enters the one-interaction-length luminosity; the previous
+    # (2.0 g/cm^3, 38.1 cm) pair gave 76.2 g/cm^2, 11% low.
+    "carbon": TargetMaterial("carbon", 6, 12.011, 2.21, 38.83),
 }
 
 # Experiment families for which the upsilon channel is computed.

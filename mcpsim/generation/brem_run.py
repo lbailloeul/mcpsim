@@ -181,6 +181,31 @@ def _prepare_patched_script(cfg: Config, work_dir: Path) -> Path:
                 f"the script layout may have changed."
             )
 
+    # The output header is hard-coded to the DarkQuest iron values. The readers
+    # rescale grids by the header's A (physics.brem.target_rescale), so the
+    # header must name the nucleus sigma_pA was actually computed for.
+    header_patches: List[Tuple[str, str, bool]] = [
+        ('"A_Fe = 55.845 g/mol   # atomic mass of iron\\n"',
+         f'"A_target = {t.A} g/mol   # atomic mass ({t.name})\\n"', True),
+        ('"ρ_Fe = 7.87 g/cm³  # density of iron\\n"',
+         f'"rho_target = {t.density_g_cm3} g/cm³  # density ({t.name})\\n"', False),
+        ('"L_target = 16.8 cm # one nuclear interaction length of protons in iron)\\n"',
+         f'"L_target = {t.interaction_length_cm} cm # one nuclear interaction length ({t.name})\\n"', False),
+        ('"E_beam = 120 GeV   # beam energy\\n"',
+         f'"E_beam = {cfg.beam.energy_gev:g} GeV   # beam energy\\n"', False),
+        ('"N_POT   = 1.0e20   # protons on target\\n"',
+         f'"N_POT   = {cfg.beam.n_pot:.1e}   # protons on target\\n"', False),
+    ]
+    for old, new, required in header_patches:
+        if old in text:
+            text = text.replace(old, new)
+        elif required:
+            raise common.ToolchainError(
+                f"could not patch the grid header in mCP_brem.py ({old!r}); the "
+                f"header layout may have changed, and a stale 'A_' line would make "
+                f"mcpsim rescale the regenerated grids wrongly."
+            )
+
     dest = work_dir / "mCP_brem_patched.py"
     dest.write_text(text)
     return dest

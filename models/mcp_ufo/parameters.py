@@ -5,7 +5,7 @@
 #              no QCD vertices in this model)
 #   MCPINPUTS: EPS — the millicharge in units of e (the chi-photon coupling
 #              is EPS * e; cross sections scale as EPS^2)
-#   MASS:      MCHI (pdg 9000001)
+#   MASS:      MCHI (pdg 31)
 
 from .object_library import Parameter
 

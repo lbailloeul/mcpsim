@@ -9,12 +9,13 @@ epsilon/detection dependence is applied later in sensitivity.signal_2d.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from pathlib import Path
+from typing import Dict, List, Optional
 
 import numpy as np
 
 from . import geometry, paths
-from .config import Config
+from .config import Config, run_config
 from .physics import brem as brem_mod
 from .physics import constants as C
 from .physics import drellyan, meson_decay
@@ -101,17 +102,12 @@ def _active_channels(cfg: Config) -> tuple[List[str], List[str]]:
 
 def compute_production(cfg: Config) -> ProductionResult:
     """Evaluate all configured channels on the config's mass grid."""
+    cfg = run_config(cfg)
     grid_path = paths.resolve_data(cfg.data.mass_grid)
     try:
         grid = np.loadtxt(grid_path).astype(float)
     except FileNotFoundError as exc:
-        if not paths.source_repo().exists():
-            raise FileNotFoundError(
-                f"mass grid '{cfg.data.mass_grid}' not found (tried {grid_path}) "
-                f"because the data source repo is missing. Set MCPSIM_SOURCE_REPO "
-                f"or the 'source_repo' config field to your github-repo-scripts "
-                f"checkout / data bundle."
-            ) from exc
+        paths.require_source_repo()   # no data at all: raise the download instructions
         raise FileNotFoundError(
             f"mass grid '{cfg.data.mass_grid}' not found (tried {grid_path}). "
             f"Check the data.mass_grid config value against the source repo at "
@@ -195,6 +191,11 @@ def _upsilon_ageo(cfg: Config, jpsi_ageo, result: ProductionResult):
     if jpsi_ageo is not None:
         finite = jpsi_ageo[np.isfinite(jpsi_ageo) & (jpsi_ageo > 0)]
         if finite.size:
+            result.warnings.append(
+                f"upsilon has no acceptance scan: it borrows this run's low-mass "
+                f"J/psi acceptance ({finite[0]:.4g}) flat in mass, past the J/psi "
+                f"scan's 1.525 GeV end; the channel is ~1e-4 of the J/psi "
+                f"(docs/physics.md).")
             return float(finite[0])
 
     result.warnings.append(
@@ -205,12 +206,22 @@ def _upsilon_ageo(cfg: Config, jpsi_ageo, result: ProductionResult):
     return None
 
 
+def acceptance_files_valid(cfg: Config) -> bool:
+    """True when the archived acceptance files (data.acceptance, data.dy_ageo)
+    were made for the detector this run models: the preset's own detector, or
+    the published one (legacy_detector) when the preset records it."""
+    if not cfg.geometry_is_preset:
+        return False
+    return (cfg.legacy_detector is None
+            or geometry.face_signature(cfg.detector) == geometry.face_signature(cfg.legacy_detector))
+
+
 def _meson_ageo(cfg: Config, name: str, grid: np.ndarray,
                 result: ProductionResult):
     """Geometric acceptance for one meson, honest about geometry.
 
-    1. Preset geometry + a configured file -> load the file verbatim
-       (bit-for-bit parity with the published pipeline).
+    1. The file was made for this detector (acceptance_files_valid) -> load
+       it verbatim (bit-for-bit parity with the published pipeline).
     2. Overridden geometry + the Python engine + archived PYTHIA samples ->
        recompute for the ACTUAL geometry (cached under mcpsim-output/cache).
     3. Otherwise fall back to the preset file WITH A LOUD WARNING — the file
@@ -228,7 +239,7 @@ def _meson_ageo(cfg: Config, name: str, grid: np.ndarray,
                 f"acceptance file missing for '{name}' ({acc_file}); skipping.")
             return None
 
-    if cfg.geometry_is_preset and acc_file:
+    if acceptance_files_valid(cfg) and acc_file:
         return _load_file()
 
     if cfg.engine.decay == "python":
@@ -285,6 +296,39 @@ def _add_brem(cfg: Config, grid: np.ndarray, result: ProductionResult) -> None:
             )
         bands[idx] = brem_mod.interp_to_grid(m, y, grid)
 
+    # The grids also carry the acceptance of the detector they were generated
+    # for (single track or shared bar on a 1x1 m face at 40 / 100 m, with the
+    # first chi always at azimuth 0, so their theta axis ends at the face's
+    # half-width), so brem through any part of the face beyond that angle is
+    # underestimated: the corners of the 1x1 m face itself, all of a far
+    # off-axis face.
+    lim = cfg.data.brem_max_theta_mrad
+    if lim is not None:
+        reach = 1e3 * geometry.face_max_theta(det)
+        if reach > lim * (1 + 1e-6):
+            where = ("brem is underestimated (it collapses at low mass)" if det.offaxis_mrad
+                     else "brem through the face beyond that angle is missing (underestimated)")
+            result.warnings.append(
+                f"brem is not accurate above {lim:g} mrad: the grids only resolve "
+                f"the face of the detector they were generated for out to that "
+                f"angle, and this detector reaches {reach:.3f} mrad, so {where}.")
+
+    # The grids carry sigma_pA of the nucleus they were generated for; the brem
+    # readers rescale to this target. Say so, since it moves brem by up to x3.
+    files = sorted(brem_dir.glob(cfg.data.brem_pattern))
+    if files:
+        A_grid = brem_mod.grid_target_A(str(files[0]))
+        if A_grid is None:
+            result.warnings.append(
+                f"brem grids in {brem_dir} do not declare their target "
+                f"('# A_<X> = ... g/mol' header); assuming they were generated "
+                f"for target '{t.name}' (A={t.A:g}), no sigma_pA rescaling.")
+        elif abs(A_grid - t.A) > 1e-6:
+            scale = brem_mod.sigma_pA_mb(t.A) / brem_mod.sigma_pA_mb(A_grid)
+            result.warnings.append(
+                f"brem grids were generated for A={A_grid:g}; rescaled their "
+                f"sigma_pA to target '{t.name}' (A={t.A:g}): x{scale:.3f}.")
+
     if bands[1].sum() == 0:
         result.warnings.append(
             f"no brem files matched {cfg.data.brem_pattern} in {brem_dir}; "
@@ -293,22 +337,85 @@ def _add_brem(cfg: Config, grid: np.ndarray, result: ProductionResult) -> None:
     result.brem_low, result.brem_central, result.brem_high = bands[0], bands[1], bands[2]
 
 
+def drell_yan_table(cfg: Config) -> Optional[Path]:
+    """The built-in per-material Drell-Yan table this run uses, or None.
+
+    Default (fidelity corrected): the table for the configured target and
+    beam energy (paths.DY_TABLES_DIR). fidelity = legacy keeps the paper's
+    MadGraph scan (data.dy_cross, iron nPDF for both beams), and so does an
+    explicit data.dy_cross in a user config."""
+    if cfg.engine.fidelity == "legacy" or not cfg.dy_cross_is_preset:
+        return None
+    return drellyan.find_table(paths.DY_TABLES_DIR, cfg.beam.energy_gev, cfg.target.name)
+
+
 def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> None:
-    if not (cfg.data.dy_cross and cfg.data.dy_ageo):
-        result.warnings.append("no Drell-Yan inputs configured; skipping (use --regenerate to run MadGraph).")
-        return
-    try:
-        m, y = drellyan.dy_yield(
-            str(paths.resolve_data(cfg.data.dy_cross)),
-            str(paths.resolve_data(cfg.data.dy_ageo)),
-            cfg.beam.n_pot,
-        )
-    except OSError:
-        result.warnings.append("Drell-Yan input files missing; skipping.")
-        return
-    mismatch = drellyan.row_mismatch(str(paths.resolve_data(cfg.data.dy_cross)),
-                                     str(paths.resolve_data(cfg.data.dy_ageo)))
-    if mismatch:
-        result.warnings.append(mismatch)
+    # Per-nucleon sigma_DY -> per POT: divide by the configured target's
+    # sigma_inel/A. The published pipeline used the iron value (13 mb) for
+    # every target; legacy fidelity keeps it.
+    t = cfg.target
+    sigma_mb = (C.SIGMA_PN_INELASTIC_MB if cfg.engine.fidelity == "legacy" else
+                drellyan.sigma_inel_per_nucleon_mb(t.density_g_cm3, t.interaction_length_cm))
+    table = drell_yan_table(cfg)
+    if table is not None:
+        tab = drellyan.load_table(table)
+        m, y = drellyan.dy_yield_table(tab, cfg.beam.n_pot, sigma_mb)
+        face = geometry.face_signature(cfg.detector)
+        if tab.acc_detector != face:
+            result.warnings.append(
+                f"Drell-Yan acceptance is the LO acceptance of the preset's "
+                f"detector ({tab.acc_detector}), not yours ({face}); it is not "
+                f"recomputed for custom or off-axis detectors. Treat this "
+                f"channel as approximate.")
+    else:
+        if not (cfg.data.dy_cross and cfg.data.dy_ageo):
+            result.warnings.append(
+                f"no Drell-Yan cross sections: no built-in table for target "
+                f"'{t.name}' at {cfg.beam.energy_gev:g} GeV and no data.dy_cross/"
+                f"dy_ageo scan; skipping.")
+            return
+        cross = str(paths.resolve_data(cfg.data.dy_cross))
+        ageo = str(paths.resolve_data(cfg.data.dy_ageo))
+        try:
+            m, y = drellyan.dy_yield(cross, ageo, cfg.beam.n_pot, sigma_inelastic_mb=sigma_mb)
+        except OSError:
+            result.warnings.append("Drell-Yan input files missing; skipping.")
+            return
+        _check_dy_scan(cfg, cross, ageo, result)
+        if not acceptance_files_valid(cfg):
+            result.warnings.append(
+                f"Drell-Yan acceptance is the PRESET-geometry file "
+                f"({cfg.data.dy_ageo}), not your detector geometry — it is not "
+                f"recomputed for custom or off-axis detectors. Treat this channel "
+                f"as approximate.")
     order = np.argsort(m)
     result.drell_yan = np.interp(grid, m[order], y[order], left=0.0, right=0.0)
+
+
+def _check_dy_scan(cfg: Config, cross: str, ageo: str, result: ProductionResult) -> None:
+    """Caveats of a MadGraph scan (data.dy_cross) used in place of a table."""
+    t, mat = cfg.target, cfg.data.dy_material
+    if cfg.engine.fidelity != "legacy" and cfg.dy_cross_is_preset:
+        result.warnings.append(
+            f"no built-in Drell-Yan table for target '{t.name}' at "
+            f"{cfg.beam.energy_gev:g} GeV; using the scan {cfg.data.dy_cross}. "
+            f"Build one with `python -m mcpsim.generation.dy_tables` (docs/data.md).")
+    if mat is None:
+        result.warnings.append(
+            f"the Drell-Yan cross sections do not declare the material their "
+            f"nuclear PDFs were simulated for (data.dy_material); they are "
+            f"applied to target '{t.name}' as they are.")
+    elif mat != t.name and cfg.engine.fidelity == "legacy":
+        result.warnings.append(
+            f"Drell-Yan uses the paper's scan, simulated with {mat} nuclear PDFs, "
+            f"and the 13 mb normalisation for target '{t.name}' (fidelity legacy, "
+            f"as published).")
+    elif mat != t.name:
+        result.warnings.append(
+            f"Drell-Yan cross sections were simulated with {mat} nuclear PDFs "
+            f"and are applied to target '{t.name}': the per-POT normalisation "
+            f"follows the target, but the per-nucleon nPDF difference is not "
+            f"included (<~10% for m_chi <~ 3 GeV, up to ~25% near the kinematic limit).")
+    mismatch = drellyan.row_mismatch(cross, ageo)
+    if mismatch:
+        result.warnings.append(mismatch)

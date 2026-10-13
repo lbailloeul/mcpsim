@@ -40,9 +40,24 @@ generate q q~ > chi chi~ / z
 output {outdir}
 """
 
+# The settings that reproduce the archived DarkQuest and SHiP dy_cross files
+# (an independent LO convolution matches them to 0.1-0.7%, see docs/data.md):
+# the iron bound-proton nPDF nCTEQ15_56_26 for BOTH beams (stock MadGraph
+# takes one lhaid), mu_F = mu_R = sqrt(s_hat) = M(chi chi~), a pair-mass cut
+# M >= 2 GeV (below it vector mesons cover the region), alpha = 1/127.9 from
+# the UFO model, and the exact fixed-target sqrt(s). A regenerated scan
+# supplies the acceptance for the configured geometry; by default its cross
+# sections are then replaced by the built-in per-material table when one
+# exists for the beam energy (model.drell_yan_table; free-proton beam on the
+# target nucleus, generation/dy_tables.py).
+DY_PDF_SET, DY_PDF_LHAID, DY_PDF_MATERIAL = "nCTEQ15_56_26", 100600, "iron"
+DY_PAIR_MASS_MIN_GEV = 2.0
+
 RUN_CARD_SETTINGS = {
     "lpp1": "1", "lpp2": "1",
-    "pdlabel": "lhapdf", "lhaid": "30000",   # nCTEQ15-ish; override per setup
+    "pdlabel": "lhapdf", "lhaid": str(DY_PDF_LHAID),
+    "dynamical_scale_choice": "4",                       # sqrt(s_hat)
+    "mxx_min_pdg": f"{{{MCP_PDG_DEFAULT}: {DY_PAIR_MASS_MIN_GEV}}}",
     "use_syst": "False",
 }
 
@@ -58,8 +73,8 @@ def generate_drell_yan(cfg: Config, masses: np.ndarray, work_dir: Path) -> Tuple
     for mchi in np.atleast_1d(masses):
         proc_dir = work_dir / f"dy_m{mchi:.6g}"
         sigma_pb, lhe = _run_single_mass(cfg, model, float(mchi), proc_dir)
-        n_tot, n_acc = parse_lhe_acceptance(lhe, MCP_PDG_DEFAULT, cfg)
-        acc = (n_acc / n_tot) if n_tot else 0.0
+        n_tot, n_hits = parse_lhe_acceptance(lhe, MCP_PDG_DEFAULT, cfg)
+        acc = (n_hits / (2.0 * n_tot)) if n_tot else 0.0      # per chi
         cross_rows.append(sigma_pb)
         ageo_rows.append((float(mchi), acc))
 
@@ -111,7 +126,10 @@ def _patch_run_card(path: Path, cfg: Config) -> None:
     text = path.read_text()
     settings = dict(RUN_CARD_SETTINGS)
     settings["ebeam1"] = f"{cfg.beam.energy_gev}"
-    # Fixed target: second beam at rest (proton mass ~ 0 vs beam energy).
+    # Fixed target: second beam at rest. The archived scans sit at the exact
+    # fixed-target sqrt(s) (15.06 GeV at 120 GeV); check that MadGraph reports
+    # that value — with massless-beam kinematics (s = 4 E1 E2) this setting
+    # would give 21.2 GeV instead.
     settings["ebeam2"] = "0.938" if not cfg.beam.is_collider else f"{cfg.beam.energy_b_gev}"
     for key, val in settings.items():
         text = re.sub(rf"(?m)^(\s*)\S+(\s*=\s*{key}\b.*)$", rf"\g<1>{val}\g<2>", text)
@@ -145,27 +163,27 @@ def parse_cross_section(proc_dir: Path) -> float:
 
 
 def parse_lhe_acceptance(lhe_path: Path | str, mcp_pdg: int, cfg: Config) -> Tuple[int, int]:
-    """Count events and geometry-accepted events from an LHE file.
+    """Count events and millicharged particles entering the detector aperture
+    (cylindrical theta cut, or rectangular bar-array face) in an LHE file.
 
-    An event is accepted when at least one millicharged particle enters the
-    detector aperture (cylindrical theta cut, or rectangular bar-array face).
-    Returns (n_total, n_accepted). Works on plain or gzipped LHE.
+    Returns (n_total, n_hits); n_hits counts chi and chi-bar separately, so
+    n_hits / (2 n_total) is the per-chi acceptance — the convention of the
+    archived ageo files and the meson channels (not the share of events with
+    at least one hit, up to 2x larger). Works on plain or gzipped LHE.
     """
     det = cfg.detector
     opener = gzip.open if str(lhe_path).endswith(".gz") else open
-    n_total = n_accepted = 0
+    n_total = n_hits = 0
     with opener(lhe_path, "rt") as fh:
         in_event = False
-        accepted = False
         header_pending = False
         for line in fh:
             s = line.strip()
             if s.startswith("<event"):
-                in_event, accepted, header_pending = True, False, True
+                in_event, header_pending = True, True
                 continue
             if s.startswith("</event>"):
                 n_total += 1
-                n_accepted += int(accepted)
                 in_event = False
                 continue
             if not in_event:
@@ -182,8 +200,8 @@ def parse_lhe_acceptance(lhe_path: Path | str, mcp_pdg: int, cfg: Config) -> Tup
             except ValueError:
                 continue
             if abs(pid) == mcp_pdg and _in_acceptance(px, py, pz, det):
-                accepted = True
-    return n_total, n_accepted
+                n_hits += 1
+    return n_total, n_hits
 
 
 def _in_acceptance(px: float, py: float, pz: float, det) -> bool:

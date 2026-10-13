@@ -21,9 +21,15 @@ from typing import Optional
 PACKAGE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_DIR.parent
 PRESETS_DIR = PACKAGE_DIR / "presets"
+# Per-material Drell-Yan cross sections shipped with the package
+# (generation/dy_tables.py).
+DY_TABLES_DIR = PACKAGE_DIR / "data" / "drell_yan"
 
-# Output (always inside this project, never the source repo).
-WORK_DIR = PROJECT_ROOT / "mcpsim-output"
+# Output never goes into the source repo. From a source checkout it lands in
+# the project; from a plain `pip install` PROJECT_ROOT is site-packages, so it
+# lands in the current working directory instead.
+WORK_DIR = ((PROJECT_ROOT if (PROJECT_ROOT / "pyproject.toml").exists() else Path.cwd())
+            / "mcpsim-output")
 CACHE_DIR = WORK_DIR / "cache"
 
 _DEFAULT_SOURCE = PROJECT_ROOT.parent / "github-repo-scripts"
@@ -50,8 +56,10 @@ def require_source_repo() -> Path:
     repo = source_repo()
     if not repo.exists():
         raise FileNotFoundError(
-            f"Source repo not found at {repo}. Set MCPSIM_SOURCE_REPO or the "
-            f"'source_repo' config field to your github-repo-scripts checkout."
+            f"Data not found at {repo}. Download data.zip from "
+            f"https://doi.org/10.5281/zenodo.22690080, unzip it, and point "
+            f"MCPSIM_SOURCE_REPO (or the 'source_repo' config field) at the "
+            f"unzipped folder; `mcpsim doctor --check-data` then verifies it."
         )
     return repo
 
