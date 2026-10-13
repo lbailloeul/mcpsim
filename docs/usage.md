@@ -193,4 +193,8 @@ mcpsim generate mesons --preset darkquest --engine cpp --mass-subset 3
 
 # Brem grid on LXPLUS:
 mcpsim generate brem --preset darkquest --condor --n-proc 8
+
+# Drell-Yan scan on LXPLUS, one MadGraph job per mass (README_condor.txt in
+# the bundle covers MadGraph, the PDF set and the workers' Python):
+mcpsim generate dy --preset darkquest --condor
 ```

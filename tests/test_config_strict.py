@@ -220,3 +220,13 @@ def test_legacy_detector_is_strict(tmp_path):
     p = _write(tmp_path, "preset: darkquest\nlegacy_detector: {radius: 0.5}\n")
     with pytest.raises(ValueError, match="legacy_detector"):
         load_config(p)
+
+
+def test_config_round_trips_through_its_record():
+    import json
+    from dataclasses import asdict
+    from mcpsim import load_preset
+    from mcpsim.config import config_from_record
+    for name in ("darkquest", "ship", "flame", "lanl_12bar"):
+        cfg = load_preset(name)
+        assert config_from_record(json.loads(json.dumps(asdict(cfg)))) == cfg

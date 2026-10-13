@@ -390,7 +390,8 @@ def _execute(cfg: Config, *, out, channels, offaxis, plots: Sequence[str],
 @click.option("--mass-subset", type=int, default=None,
               help="With --regenerate: thin the mass grid to ~N points (smoke test).")
 @click.option("--condor", is_flag=True,
-              help="Regenerate brem via an HTCondor batch (one job/mass) instead of local mpirun.")
+              help="Regenerate brem and Drell-Yan as HTCondor batches (one job per mass) "
+                   "instead of locally.")
 @click.option("--no-submit", is_flag=True,
               help="With --condor, write the bundle but do not call condor_submit.")
 def run_cmd(preset, config, out, channels, engine, fidelity, seed, quick, ngamma,
@@ -474,17 +475,21 @@ def compare_cmd(presets, configs, out, channels, engine, fidelity, seed, quick,
 @_options(*_common, *_engine_opts)
 @click.option("--mass-subset", type=int, default=None, help="Use only N masses.")
 @click.option("--trials", type=int, default=None, help="Meson-generation trials.")
-@click.option("--n-proc", type=int, default=4, help="MPI ranks for brem (per job under --condor).")
+@click.option("--n-proc", type=int, default=4,
+              help="Cores: MPI ranks for brem; per job under --condor (dy: MadGraph cores).")
 @click.option("--brem-grid-size", type=int, default=100, help="VEGAS (theta,p) grid size.")
 @click.option("--brem-neval", type=int, default=4000, help="VEGAS evaluations per iteration.")
 @click.option("--brem-nitn", type=int, default=10, help="VEGAS iterations.")
+@click.option("--dy-nevents", type=int, default=None,
+              help="MadGraph events per mass for dy (default 10000).")
 @click.option("--condor", is_flag=True,
-              help="brem: emit/submit an HTCondor batch (one job/mass) instead of local mpirun.")
+              help="brem/dy: emit/submit an HTCondor batch (one job per mass) instead of "
+                   "running locally.")
 @click.option("--no-submit", is_flag=True,
               help="With --condor, write the bundle but do not call condor_submit.")
 def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
                  ngamma, target, mass_subset, trials, n_proc, brem_grid_size, brem_neval,
-                 brem_nitn, condor, no_submit) -> None:
+                 brem_nitn, dy_nevents, condor, no_submit) -> None:
     """Run a single heavy generation step (mesons / brem / dy).
 
     Exits non-zero when the step produced no outputs (e.g. a missing
@@ -493,6 +498,8 @@ def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
     from .pipeline import regenerate_inputs
     if no_submit and not condor:
         raise click.UsageError("--no-submit only applies with --condor.")
+    if condor and step == "mesons":
+        raise click.UsageError("--condor applies to brem and dy.")
     cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
     # Restrict to the one requested channel so only that backend runs.
     channel = normalize_channels([step])[0]
@@ -500,7 +507,8 @@ def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
     gen_dir = ((Path(out).resolve() if out else paths.WORK_DIR / cfg.tag) / "generated")
     gen_opts = {k: v for k, v in dict(
         trials=trials, n_proc=n_proc, brem_grid_size=brem_grid_size,
-        brem_neval=brem_neval, brem_nitn=brem_nitn).items() if v is not None}
+        brem_neval=brem_neval, brem_nitn=brem_nitn, dy_nevents=dy_nevents).items()
+        if v is not None}
     if condor:
         gen_opts.update(condor=True, submit=not no_submit)
     with _clean_errors():
@@ -522,11 +530,16 @@ def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
                     f"(see warnings above).", fg="red")
         raise SystemExit(1)
 
-    click.echo(f"Generation step '{step}' complete. Outputs under: {gen_dir}")
+    if condor:
+        click.echo(f"Generation step '{step}' is an HTCondor batch under {gen_dir}; "
+                   f"its outputs appear once the jobs finish.")
+    else:
+        click.echo(f"Generation step '{step}' complete. Outputs under: {gen_dir}")
     # Ready-to-paste `data:` block so the outputs can be used by `mcpsim run`.
     d = new_cfg.data
     lines = {"brem": [f"  brem_dir: {d.brem_dir}", f"  brem_pattern: \"{d.brem_pattern}\""],
-             "drell_yan": [f"  dy_cross: {d.dy_cross}", f"  dy_ageo: {d.dy_ageo}"],
+             "drell_yan": [f"  dy_cross: {d.dy_cross}", f"  dy_ageo: {d.dy_ageo}",
+                           f"  dy_material: {d.dy_material}"],
              "meson_decay": ["  acceptance:"] + [f"    {k}: {v}" for k, v in d.acceptance.items()],
              }[channel]
     click.echo("Use them in a run by adding to your config:\ndata:\n" + "\n".join(lines))

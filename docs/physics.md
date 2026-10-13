@@ -226,7 +226,9 @@ normalisation (σ / a_geo / N_DY):
 - `--fidelity legacy` keeps the paper's scan, its acceptance file (and so the
   paper's disc) and 13 mb.
 - A config that sets `data.dy_cross` itself keeps its own scan and
-  acceptance file.
+  acceptance file, and so does a run that regenerates Drell-Yan
+  (`--regenerate`, `mcpsim generate dy`): MadGraph's cross sections with the
+  iron nPDF for both beams, and its acceptance for your detector.
 - A target or beam energy without a table falls back to the preset's iron
   scan, and says so. To get a table, add the material to
   `physics/constants.TARGET_MATERIALS` and rerun the generator.
@@ -239,7 +241,13 @@ nCTEQ15_56_26 (LHAPDF 100600) for **both** beams (stock MadGraph takes a single
 a **pair-mass cut M(χχ̄) ≥ 2 GeV**, α = 1/127.9 from the UFO model, and the
 exact fixed-target √s — the paper used them for DarkQuest *and* SHiP (an
 approximation confirmed by the authors). `generation/madgraph.py` uses these
-settings and counts the acceptance per χ, like the archived files. Below
+settings and counts the acceptance per χ, like the archived files. It
+generates both parton orderings (`q q~` and `q~ q`: MadGraph adds the mirror
+process only when asked, and σ halves without it), in the beam-nucleon
+centre of mass with massless beams, and boosts the events to the lab itself:
+with the target at rest MadGraph writes the events in a lab frame rebuilt
+from a massive beam of energy E_parton/x, off at these √ŝ ≈ 2 GeV, which
+pushed large-x pairs forward and raised the acceptance by 3.4%. Below
 m_χ ≈ 1 GeV the 2 GeV cut makes σ
 flat (~499 pb for DarkQuest in the paper), leaving the low-mass region to the
 meson channels.

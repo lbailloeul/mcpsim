@@ -1,7 +1,8 @@
 """Built-in per-material Drell-Yan cross-section tables (mcpsim/data/drell_yan).
 
 sigma_DY(m_chi) per target nucleon at eps = 1: LO q qbar -> gamma* -> chi chibar
-(q = u d s c, MadGraph's `generate q q~ > chi chi~ / z`) for a proton beam on a
+(q = u d s c, either from the beam; MadGraph's `generate q q~ > chi chi~ / z`
+plus `add process q~ q > chi chi~ / z`) for a proton beam on a
 nucleus (A, Z), at the exact fixed-target sqrt(s), mu_F = mu_R = M(chi chibar),
 M(chi chibar) >= 2 GeV and alpha = 1/127.9. These are the archived scans'
 settings except for the parton densities (nCTEQ15, arXiv:1509.00792):

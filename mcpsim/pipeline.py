@@ -168,7 +168,8 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
 
     Imported lazily so fast mode never needs the generation dependencies.
     `gen_opts` tunes resolution: trials, n_proc, brem_grid_size, brem_neval,
-    brem_nitn (all optional; sensible defaults otherwise). Each channel that
+    brem_nitn, dy_nevents (all optional; sensible defaults otherwise), and
+    condor/submit send brem and Drell-Yan to HTCondor batches. Each channel that
     cannot run (missing toolchain, unsupported geometry) degrades to its
     precomputed input; the reason is printed immediately AND returned so the
     CLI can repeat it in the end-of-run report instead of letting it scroll
@@ -241,6 +242,9 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
                     grid_size=opts.get("brem_grid_size", 100),
                     submit=opts.get("submit", True),
                 )
+                warnings.append(
+                    f"brem is running as an HTCondor batch in {gen_dir / 'brem'}; "
+                    f"this run has none until the jobs finish (see README_condor.txt there).")
             else:
                 out = brem_run.regenerate_brem(
                     cfg, brem_masses, gen_dir / "brem",
@@ -252,16 +256,31 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
         except ToolchainError as exc:
             _skip(f"brem regeneration skipped (using precomputed): {exc}")
 
+    dy_scan = False
     if "drell_yan" in cfg.channels:
         try:
-            dy_cross, dy_ageo = madgraph.generate_drell_yan(cfg, grid, gen_dir / "dy")
-            # MadGraph runs with the archived iron nPDF for both beams.
+            nevents = opts.get("dy_nevents") or madgraph.DY_NEVENTS_DEFAULT
+            if opts.get("condor"):
+                dy_cross, dy_ageo = madgraph.prepare_condor_dy(
+                    cfg, grid, gen_dir / "dy", n_proc=opts.get("n_proc", 4),
+                    nevents=nevents, submit=opts.get("submit", True))
+                warnings.append(
+                    f"Drell-Yan is running as an HTCondor batch in {gen_dir / 'dy'}; "
+                    f"this run has none until the jobs finish (see README_condor.txt there).")
+            else:
+                dy_cross, dy_ageo = madgraph.generate_drell_yan(cfg, grid, gen_dir / "dy",
+                                                                nevents=nevents)
+            # MadGraph runs with the archived iron nPDF for both beams. The
+            # scan is used as it is, like a data.dy_cross from a config, not
+            # replaced by the built-in table (model.drell_yan_table).
             data = replace(data, dy_cross=str(dy_cross), dy_ageo=str(dy_ageo),
                            dy_material=madgraph.DY_PDF_MATERIAL)
+            dy_scan = True
         except ToolchainError as exc:
             _skip(f"Drell-Yan regeneration skipped (using precomputed): {exc}")
 
-    return replace(cfg, data=data), warnings
+    cfg = replace(cfg, data=data)
+    return (replace(cfg, dy_cross_is_preset=False) if dy_scan else cfg), warnings
 
 
 def _trials(mass_subset: Optional[int]) -> int:

@@ -5,8 +5,12 @@
 # in this model, so gluon-initiated subprocesses simply have no diagrams at
 # the qq_bar -> gamma* -> chi chi_bar order.
 
-from . import parameters as Param
-from .object_library import Particle
+try:  # imported as the mcp_ufo package (mcpsim, the tests)
+    from . import parameters as Param
+    from .object_library import all_particles, Particle
+except ImportError:  # module by module (MadGraph's internal UFO scripts)
+    import parameters as Param
+    from object_library import all_particles, Particle
 
 a = Particle(pdg_code=22, name="a", antiname="a", spin=3, color=1,
              mass=Param.ZERO, width=Param.ZERO, texname="a", antitexname="a",

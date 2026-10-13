@@ -339,6 +339,21 @@ def _beam_key(energy_gev: float) -> Optional[str]:
     return None
 
 
+def config_from_record(record: dict) -> Config:
+    """Rebuild a Config from dataclasses.asdict(cfg), as stored in run records
+    and batch bundles (config.json): the inverse of asdict, with no preset
+    overlay or re-validation."""
+    sections = {"beam": BeamConfig, "target": TargetConfig, "detector": DetectorConfig,
+                "sensitivity": SensitivityConfig, "data": DataConfig, "engine": EngineConfig}
+    kw = dict(record)
+    for key, dc in sections.items():
+        if key in kw:
+            kw[key] = dc(**kw[key])
+    if kw.get("legacy_detector") is not None:
+        kw["legacy_detector"] = DetectorConfig(**kw["legacy_detector"])
+    return Config(**kw)
+
+
 def run_config(cfg: Config) -> Config:
     """The configuration a run models. fidelity = legacy on a preset that
     records the published detector (legacy_detector) models that detector, so

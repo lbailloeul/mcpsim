@@ -1,6 +1,9 @@
 # Photon couplings: quark charges and the millicharge EPS * e.
 
-from .object_library import Coupling
+try:  # imported as the mcp_ufo package (mcpsim, the tests)
+    from .object_library import all_couplings, Coupling
+except ImportError:  # module by module (MadGraph's internal UFO scripts)
+    from object_library import all_couplings, Coupling
 
 GC_a_up = Coupling(name="GC_a_up", value="(2./3.)*ee*complex(0,1)",
                    order={"QED": 1})

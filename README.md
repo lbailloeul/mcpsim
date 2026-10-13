@@ -130,9 +130,9 @@ Each one is quantified in the fidelity table in
 - **`--regenerate`:** runs the heavy backends — PYTHIA or Burman-Smith meson
   generation, the VEGAS bremsstrahlung integrator (`mpirun`), the C++ decay
   step, MadGraph for Drell-Yan. Requires the `gen` toolchains.
-- **`--condor`:** emit/submit an HTCondor bundle for the brem step (one job
-  per mass; LXPLUS-ready). Exits with instructions if `condor_submit` is
-  absent.
+- **`--condor`:** emit/submit HTCondor bundles for brem and Drell-Yan (one
+  job per mass; LXPLUS-ready, with a `README_condor.txt` in each bundle).
+  Exits with instructions if `condor_submit` is absent.
 
 ## Documentation
 

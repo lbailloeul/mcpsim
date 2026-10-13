@@ -3,7 +3,10 @@
 
 import cmath
 
-from .object_library import Function
+try:  # imported as the mcp_ufo package (mcpsim, the tests)
+    from .object_library import all_functions, Function
+except ImportError:  # module by module (MadGraph's internal UFO scripts)
+    from object_library import all_functions, Function
 
 complexconjugate = Function(name="complexconjugate",
                             arguments=("z",),

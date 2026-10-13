@@ -88,9 +88,14 @@ a scan of your conda envs for ones that carry them.
 - **MPI + vegas** (local brem): `pip install -e '.[gen]'` (mpi4py, vegas) plus
   an MPI runtime (`brew install open-mpi` / `conda install -c conda-forge openmpi`).
   On LXPLUS prefer `--condor` (no local MPI needed).
-- **MadGraph + LHAPDF** (DY): install MG5_aMC, put `mg5_aMC` on PATH, install
-  LHAPDF with the nCTEQ15 grids, and set `MCPSIM_MCP_MODEL` to the UFO model
-  directory (this repo ships one under `models/mcp_ufo`).
+- **MadGraph + LHAPDF** (DY): install MG5_aMC 3.x (verified with 3.5.17) and
+  put `mg5_aMC` on PATH; MadGraph's `install lhapdf6` (or an LCG view)
+  provides LHAPDF. It needs the grid nCTEQ15_56_26 (LHAPDF id 100600) in its
+  data directory, and **LHAPDF ≥ 6.5 rejects that set's `.info` file** until
+  two lines are appended to it: `AlphaS_FlavorScheme: variable` and
+  `AlphaS_NumFlavors: 5`. The UFO model is the in-repo `models/mcp_ufo`
+  unless `MCPSIM_MCP_MODEL` names another. On LXPLUS use `--condor`; the
+  bundle's `README_condor.txt` covers the workers.
 
 ## Troubleshooting
 
@@ -101,6 +106,7 @@ a scan of your conda envs for ones that carry them.
 | `no brem files matched ...` warning | brem grids absent for this energy | install the brem set, or `--channels meson_decay` |
 | `acceptance uses the PRESET-geometry file` warning | custom geometry but no PYTHIA samples | install the sample bundle (tier 2) or accept the approximation |
 | `archived ... samples were generated at 120 GeV` | non-120 GeV beam with the python engine | generate fresh samples (tier 3) and set `engine.samples_dir` |
+| `LHAPDF::MetadataError ... AlphaS_FlavorScheme` (or `AlphaS_NumFlavors`) | LHAPDF ≥ 6.5 with an nCTEQ15 grid that predates those keys | append `AlphaS_FlavorScheme: variable` and `AlphaS_NumFlavors: 5` to `nCTEQ15_56_26.info` (on a new line) |
 | `'root-config' not found` | ROOT not sourced | activate the conda env / LCG view that has it (`mcpsim doctor` lists candidates) |
 | `Generation step '...' produced no outputs` (exit 1) | missing toolchain — the reasons are in the yellow warnings above it | install the tool or use the python engine |
 | empty plots + `no channel produced any yield` | all channels skipped (check warnings) | fix the data paths listed in the warnings |

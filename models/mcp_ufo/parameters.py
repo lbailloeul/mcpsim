@@ -7,7 +7,10 @@
 #              is EPS * e; cross sections scale as EPS^2)
 #   MASS:      MCHI (pdg 31)
 
-from .object_library import Parameter
+try:  # imported as the mcp_ufo package (mcpsim, the tests)
+    from .object_library import all_parameters, Parameter
+except ImportError:  # module by module (MadGraph's internal UFO scripts)
+    from object_library import all_parameters, Parameter
 
 aEWM1 = Parameter(name="aEWM1", nature="external", type="real",
                   value=127.9, texname="\\text{aEWM1}",

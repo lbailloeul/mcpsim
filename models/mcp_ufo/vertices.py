@@ -1,9 +1,15 @@
 # Vertices: q q~ a for the five flavours, and chi chi~ a.
 
-from . import couplings as C
-from . import lorentz as L
-from . import particles as P
-from .object_library import Vertex
+try:  # imported as the mcp_ufo package (mcpsim, the tests)
+    from . import couplings as C
+    from . import lorentz as L
+    from . import particles as P
+    from .object_library import all_vertices, Vertex
+except ImportError:  # module by module (MadGraph's internal UFO scripts)
+    import couplings as C
+    import lorentz as L
+    import particles as P
+    from object_library import all_vertices, Vertex
 
 V_ua = Vertex(name="V_ua", particles=[P.u__tilde__, P.u, P.a],
               color=["Identity(1,2)"], lorentz=[L.FFV1],

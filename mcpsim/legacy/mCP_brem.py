@@ -1,4 +1,4 @@
-// Author : Saeid Foroughi (saeidf@physics.carleton.ca)
+# Author : Saeid Foroughi (saeidf@physics.carleton.ca)
 
 import mpi4py.rc
 mpi4py.rc.threads = False

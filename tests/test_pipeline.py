@@ -29,6 +29,30 @@ def test_toolchain_failures_return_warnings(mini_config, tmp_path, monkeypatch):
     assert len(warnings) >= 3  # mesons (per meson or geometry guard) + brem + dy
 
 
+def test_regenerated_drell_yan_scan_is_used_as_it_is(mini_config, tmp_path, monkeypatch):
+    """A fresh MadGraph scan replaces the built-in table (cross sections and
+    the acceptance of the configured detector), locally or from a batch."""
+    from mcpsim.generation import madgraph
+    from mcpsim.model import drell_yan_table
+
+    cfg = replace(mini_config, channels=["drell_yan"])
+    assert drell_yan_table(cfg) is not None                  # the iron table, by default
+    files = (tmp_path / "dy_cross_mini.txt", tmp_path / "ageo_dy_mini.txt")
+    monkeypatch.setattr(madgraph, "generate_drell_yan", lambda *a, **k: files)
+    monkeypatch.setattr(madgraph, "prepare_condor_dy", lambda *a, **k: files)
+    for opts in (None, {"condor": True, "submit": False}):
+        new_cfg, warnings = regenerate_inputs(cfg, tmp_path / "gen", gen_opts=opts)
+        assert new_cfg.data.dy_cross == str(files[0]) and new_cfg.data.dy_material == "iron"
+        assert not new_cfg.dy_cross_is_preset and drell_yan_table(new_cfg) is None
+        assert any("HTCondor batch" in w for w in warnings) == bool(opts)
+
+    # a failed regeneration keeps the precomputed inputs, table included
+    monkeypatch.setattr(madgraph, "generate_drell_yan",
+                        lambda *a, **k: (_ for _ in ()).throw(ToolchainError("no mg5")))
+    new_cfg, _ = regenerate_inputs(cfg, tmp_path / "gen")
+    assert new_cfg.dy_cross_is_preset and drell_yan_table(new_cfg) is not None
+
+
 def test_geometry_guard_runs_before_meson_generation(mini_config, tmp_path, monkeypatch):
     """check_supported must fire before the expensive generation step.
 
