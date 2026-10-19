@@ -18,9 +18,9 @@ from typing import List, Optional, Sequence
 import click
 
 from . import paths
-from .config import (TARGET_ALIASES, Config, list_presets, load_config, load_preset,
-                     normalize_channels, normalize_target, pin_supplied_acceptance,
-                     run_config)
+from .config import (DECAY_ENGINES, FIDELITIES, TARGET_ALIASES, Config, list_presets,
+                     load_config, load_preset, normalize_channels, normalize_target,
+                     pin_supplied_acceptance, run_config)
 from .physics import constants as C
 
 
@@ -91,9 +91,9 @@ _offaxis_opt = click.option("--offaxis", default=None,
                                  "one run per angle, plus overlay plots for several.")
 
 _engine_opts = [
-    click.option("--engine", type=click.Choice(["python", "cpp"]), default=None,
+    click.option("--engine", type=click.Choice(DECAY_ENGINES), default=None,
                  help="Decay-acceptance engine [default: config engine.decay]."),
-    click.option("--fidelity", type=click.Choice(["corrected", "legacy"]), default=None,
+    click.option("--fidelity", type=click.Choice(FIDELITIES), default=None,
                  help="Physics fidelity: corrected samplers vs bit-for-bit legacy."),
     click.option("--seed", type=int, default=None, help="Engine RNG seed."),
     click.option("--quick", is_flag=True,

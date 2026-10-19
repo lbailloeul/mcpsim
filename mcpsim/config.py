@@ -36,10 +36,12 @@ TARGET_ALIASES = {"fe": "iron", "mo": "molybdenum", "moly": "molybdenum",
 # Config.acceptance_made_for value of a file the user config names: it is used
 # as it is, whatever detector the run models.
 SUPPLIED_BY_CONFIG = "named by the config"
-# A DetectorConfig or BeamConfig holding any other value cannot be built, so
-# code that branches on detector.type or beam.frame needs no fallback.
+# A DetectorConfig, BeamConfig or EngineConfig holding any other value cannot
+# be built, so code that branches on these fields needs no fallback.
 DETECTOR_TYPES = ("cylindrical", "bar_array")
 BEAM_FRAMES = ("fixed_target", "collider")
+DECAY_ENGINES = ("python", "cpp")
+FIDELITIES = ("corrected", "legacy")
 
 
 _TARGET_NUMBERS = ("Z", "A", "density_g_cm3", "interaction_length_cm")
@@ -224,11 +226,8 @@ class EngineConfig:
     quick: bool = False                 # cap sample sizes (smoke tests; not cached)
 
     def __post_init__(self) -> None:
-        if self.decay not in ("python", "cpp"):
-            raise ValueError(f"engine.decay must be 'python' or 'cpp', got {self.decay!r}")
-        if self.fidelity not in ("corrected", "legacy"):
-            raise ValueError(
-                f"engine.fidelity must be 'corrected' or 'legacy', got {self.fidelity!r}")
+        _check_choice("engine.decay", self.decay, DECAY_ENGINES)
+        _check_choice("engine.fidelity", self.fidelity, FIDELITIES)
 
 
 @dataclass
