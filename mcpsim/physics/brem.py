@@ -28,8 +28,6 @@ import numpy as np
 
 from .luminosity import effective_lumi_pb
 
-LAMBDA_VALUES = (1.0, 1.5, 2.0)  # column index 0/1/2 in the sigma block
-
 _GRID_A_RE = re.compile(r"^#\s*A_\w+\s*=\s*([0-9.]+(?:[eE][-+]?\d+)?)\s*g/mol")
 
 

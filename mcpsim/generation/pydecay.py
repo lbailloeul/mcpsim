@@ -31,7 +31,7 @@ import hashlib
 import json
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 
@@ -175,7 +175,7 @@ def decay_to_radii(spec: MesonSpec, mchi: float, P, rng: np.random.Generator,
 # Acceptance scan
 # --------------------------------------------------------------------------
 def compute_acceptance(cfg: Config, meson: str, grid: np.ndarray, *,
-                       quick: Optional[bool] = None, verbose: bool = True
+                       verbose: bool = True
                        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Per-chi geometric acceptance vs mass for one meson.
 
@@ -183,15 +183,13 @@ def compute_acceptance(cfg: Config, meson: str, grid: np.ndarray, *,
     onto the full grid downstream), the acceptance, and the clustered MC
     relative error (accounts for re-decaying each parent `repeats` times).
     """
-    if quick is None:
-        quick = cfg.engine.quick
     spec = MESONS[meson]
-    parents, repeats = samples.load_parents(cfg, meson, quick=quick)
+    parents, repeats = samples.load_parents(cfg, meson, quick=cfg.engine.quick)
     n_parents = parents[0].size
     rng = np.random.default_rng(cfg.engine.seed)
 
     below = np.flatnonzero(grid < spec.mass / 2.0)
-    k = min(below.size, MAX_SCAN_MASSES if not quick else 9)
+    k = min(below.size, MAX_SCAN_MASSES if not cfg.engine.quick else 9)
     scan_idx = below[np.unique(np.round(np.linspace(0, below.size - 1, k)).astype(int))]
     scan_m = grid[scan_idx]
 
@@ -227,11 +225,10 @@ def compute_acceptance(cfg: Config, meson: str, grid: np.ndarray, *,
     return scan_m, ageo, relerr
 
 
-def acceptance_on_grid(cfg: Config, meson: str, grid: np.ndarray, *,
-                       quick: Optional[bool] = None) -> np.ndarray:
+def acceptance_on_grid(cfg: Config, meson: str, grid: np.ndarray) -> np.ndarray:
     """Acceptance interpolated onto the full mass grid (zero beyond threshold)."""
     spec = MESONS[meson]
-    scan_m, ageo, _ = compute_acceptance(cfg, meson, grid, quick=quick)
+    scan_m, ageo, _ = compute_acceptance(cfg, meson, grid)
     ag = np.interp(grid, scan_m, ageo, left=ageo[0] if ageo.size else 0.0,
                    right=0.0)
     ag[grid >= spec.mass / 2.0] = 0.0
@@ -254,21 +251,19 @@ def geometry_hash(cfg: Config, meson: str, grid: np.ndarray) -> str:
     return hashlib.md5(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def cached_acceptance(cfg: Config, meson: str, grid: np.ndarray, cache_dir: Path,
-                      *, quick: Optional[bool] = None) -> np.ndarray:
+def cached_acceptance(cfg: Config, meson: str, grid: np.ndarray,
+                      cache_dir: Path) -> np.ndarray:
     """acceptance_on_grid with an on-disk cache + JSON provenance sidecar."""
-    if quick is None:
-        quick = cfg.engine.quick
     key = geometry_hash(cfg, meson, grid)
     sub = cache_dir / key
     out = sub / f"ageo_{meson}.txt"
-    if out.exists() and not quick:
+    if out.exists() and not cfg.engine.quick:
         arr = np.loadtxt(out)
         if arr.shape[0] == grid.size:
             return arr[:, 1]
     sub.mkdir(parents=True, exist_ok=True)
-    ag = acceptance_on_grid(cfg, meson, grid, quick=quick)
-    if not quick:
+    ag = acceptance_on_grid(cfg, meson, grid)
+    if not cfg.engine.quick:
         np.savetxt(out, np.column_stack([grid, ag]), fmt="%.8g",
                    header=f"mass_GeV ageo(per-chi hit prob) [pydecay {key}]")
         det = cfg.detector

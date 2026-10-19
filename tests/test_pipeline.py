@@ -4,7 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from mcpsim import load_preset
 from mcpsim.generation.common import ToolchainError
@@ -93,7 +92,7 @@ def test_a_regenerated_drell_yan_acceptance_is_this_detectors(mini_repo, tmp_pat
 def test_toolchain_failures_return_warnings(mini_config, tmp_path, monkeypatch):
     """cpp engine with every backend unavailable: nothing crashes, every skip
     is returned as a warning (not just printed)."""
-    from mcpsim.generation import brem_run, decay, madgraph, mesons
+    from mcpsim.generation import brem_run, madgraph, mesons
 
     cfg = replace(mini_config,
                   engine=replace(mini_config.engine, decay="cpp"))

@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from mcpsim import paths
-from mcpsim.config import EngineConfig, load_preset
+from mcpsim.config import load_preset
 from mcpsim.model import compute_production
 from mcpsim.pipeline import write_tables
 

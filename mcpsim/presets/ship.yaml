@@ -41,7 +41,6 @@ legacy_detector:
   type: cylindrical
   distance_m: 100.0
   radius_m: 0.5
-  bar_length_m: 1.5
 
 # Same detection model as DarkQuest: P = (1 - exp(-n_gamma eps^2))^a eps^2,
 # with n_gamma derived from the plastic anchor (2.5e5 PE at eps = 1 for a 1.5 m

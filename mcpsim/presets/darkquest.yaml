@@ -46,7 +46,6 @@ legacy_detector:
   type: cylindrical
   distance_m: 40.0
   radius_m: 0.5
-  bar_length_m: 1.5
 
 # Detection model P = (1 - exp(-n_gamma eps^2))^a * eps^2:
 #   n_gamma is DERIVED from the same light-yield calculation as the other
@@ -88,8 +87,8 @@ data:
   # on the nucleus, nCTEQ15), so `--target` changes them too. The paper's
   # MadGraph scan below (iron bound-proton nPDF for BOTH beams) is used by
   # `fidelity: legacy` and when a config sets data.dy_cross itself; it is
-  # 1-column, POSITIONALLY paired with the ageo file (the dev-level DY audit
-  # checks the pairing). The acceptance file is used in both cases.
+  # 1-column, POSITIONALLY paired with the ageo file. The acceptance file is
+  # used in both cases.
   dy_cross: dy_cross_darkquest_nCTEQ15_iron.txt
   dy_material: iron        # nPDF the scan was simulated with
   dy_ageo: ageo_darkquest_nCTEQ15_iron.txt

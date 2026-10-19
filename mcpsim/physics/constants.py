@@ -20,7 +20,6 @@ ALPHA_EM_DY = 1.0 / 127.9
 M_PROTON = 0.9383          # GeV
 M_ELECTRON = 0.00051       # GeV
 N_AVOGADRO = 6.02214076e23  # /mol
-PB_TO_CM2 = 1.0e-36        # 1 pb in cm^2
 
 # Normalises the per-nucleon Drell-Yan cross section: N = N_POT * sigma_DY /
 # sigma_inel * ageo. 13 mb matches sigma_inel(p-Fe)/A = 702 mb / 55.8, the

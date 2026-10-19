@@ -97,10 +97,4 @@ def _write_beam_config(cfg: Config, dest: Path) -> None:
 
 def _copy_momentum_config(dest: Path) -> None:
     src = paths.legacy_dir() / "momentum.config"
-    if src.exists():
-        dest.write_text(src.read_text())
-    else:  # minimal hard-QCD configuration if the repo file is absent
-        dest.write_text(
-            "HardQCD:all = on\nPhotonParton:all = on\nPhaseSpace:pTHatMin = 2\n"
-            "ParticleDecays:allowPhotonRadiation = on\n"
-        )
+    dest.write_text(src.read_text())

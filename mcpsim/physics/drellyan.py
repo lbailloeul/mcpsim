@@ -19,7 +19,7 @@ target; that constant is kept for fidelity = legacy. The legacy code wrote this
 as ``sigma*1e-12 / 13e-3`` with mismatched unit labels; the expression below
 is numerically identical (regression-tested) with honest units.
 
-Known data fragility (see the dev-level DY audit and docs/data.md): the cross
+Known data fragility (see docs/data.md): the cross
 file has NO mass column, so pairing with the ageo file is positional. If the
 row counts ever differ, dy_yield truncates to the shorter length for legacy
 parity and the mismatch is surfaced as a warning upstream. (The shipped
@@ -80,9 +80,6 @@ class DYTable:
     def acc_detector(self) -> Optional[str]:
         return self.header.get("acc_detector")
 
-    def sigma_at(self, masses: np.ndarray) -> np.ndarray:
-        return sigma_from_table(self.masses, self.sigma_pb, masses)
-
 
 def load_table(path: str | Path) -> DYTable:
     """Read a table: '# key: value' header lines, then rows of
@@ -97,19 +94,6 @@ def load_table(path: str | Path) -> DYTable:
                 header[key.strip()] = value.strip()
     data = np.atleast_2d(np.loadtxt(path))
     return DYTable(data[:, 0], data[:, 1], data[:, 2] if data.shape[1] > 2 else None, header)
-
-
-def sigma_from_table(table_masses: np.ndarray, table_sigma: np.ndarray,
-                     masses: np.ndarray) -> np.ndarray:
-    """Table cross sections at `masses`: log-log interpolation, flat below the
-    first mass (the pair-mass cut makes sigma mass-independent there), zero
-    beyond the last (the kinematic reach of the table)."""
-    pos = table_sigma > 0
-    tm, ts = np.log(table_masses[pos]), np.log(table_sigma[pos])
-    m = np.asarray(masses, dtype=float)
-    sigma = np.exp(np.interp(np.log(m), tm, ts))
-    sigma[m > table_masses[pos][-1] * (1 + 1e-9)] = 0.0
-    return sigma
 
 
 def find_table(directory: str | Path, energy_gev: float, material: str) -> Optional[Path]:
@@ -150,5 +134,4 @@ def row_mismatch(dy_cross_file: str, dy_ageo_file: str) -> Optional[str]:
     return (f"Drell-Yan input row mismatch: {dy_cross_file} has {n_cross} rows "
             f"but {dy_ageo_file} has {n_ageo}; the files are paired by row "
             f"position, so the extra row(s) are dropped and alignment beyond "
-            f"the difference point is suspect. See docs/data.md "
-            f"(dev audit: python -m mcpsim.validation.dy_audit).")
+            f"the difference point is suspect. See docs/data.md.")

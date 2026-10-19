@@ -19,10 +19,6 @@ class ToolchainError(RuntimeError):
     """A required external tool or Python module is unavailable."""
 
 
-def have_command(name: str) -> bool:
-    return shutil.which(name) is not None
-
-
 def have_module(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 

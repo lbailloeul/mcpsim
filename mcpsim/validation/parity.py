@@ -19,8 +19,7 @@ the source repo. Scratch space: <WORK_DIR>/validation.
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass, replace
-from pathlib import Path
+from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np
@@ -130,10 +129,6 @@ def _side_plane_hits(P, m, fidelity, rng) -> int:
     The C++ models the detector as the plane x = SIDE_D; equivalently, decay
     with the beam along z and count lx > 0 with |SIDE_D*ly/lx|, |SIDE_D*lz/lx|
     inside the half-face."""
-    spec = replace(MESONS["pi0"], mass=PI0_MOTHER)
-    # decay_to_radii projects on a z-plane; for the side plane we need the raw
-    # lab momenta, so replicate its Dalitz stage via a large-distance trick is
-    # not enough — use the internal sampler directly.
     px, py, pz, E = P
     n = px.size
     s = pydecay.sample_dalitz_s(rng, m, PI0_MOTHER, n)

@@ -70,8 +70,8 @@ def test_sigma_inel_per_nucleon_follows_target():
 
 # -- mass-keyed per-material tables ------------------------------------------
 
-def test_table_roundtrip_and_interpolation(tmp_path):
-    from mcpsim.physics.drellyan import load_table, sigma_from_table
+def test_table_roundtrip(tmp_path):
+    from mcpsim.physics.drellyan import load_table
     path = tmp_path / "dy_sigma_iron_120GeV.txt"
     path.write_text("# material: iron\n# acc_detector: 1 x 1 m face at 40 m\n"
                     "# columns: m_chi [GeV], sigma [pb], acc\n"
@@ -80,12 +80,6 @@ def test_table_roundtrip_and_interpolation(tmp_path):
     assert table.header["material"] == "iron"
     assert table.acc_detector == "1 x 1 m face at 40 m"
     np.testing.assert_array_equal(table.acc, [0.04, 0.1, 0.15])
-    m = np.array([0.001, 0.01, 0.1, 1.0, 2.0, 4.0, 5.0])
-    out = table.sigma_at(m)
-    np.testing.assert_allclose(out[:6], [100, 100, np.sqrt(100 * 50), 50,   # flat below,
-                                         np.sqrt(50 * 1e-3), 1e-3], rtol=1e-12)  # log-log
-    assert out[6] == 0.0                                    # beyond the table's reach
-    np.testing.assert_array_equal(sigma_from_table(table.masses, table.sigma_pb, m), out)
     path.write_text("0.01 100\n1.0 50\n")                 # no acceptance column
     assert load_table(path).acc is None and load_table(path).acc_detector is None
 
@@ -133,7 +127,7 @@ def test_shipped_tables_cover_every_material_and_preset_energy():
             # the LO acceptance of the preset's 1 x 1 m face
             assert table.acc_detector == face
             assert np.all((table.acc > 0) & (table.acc < 1))
-            sigma_1gev[name] = float(table.sigma_at(np.array([1.0]))[0])
+            sigma_1gev[name] = float(np.interp(1.0, m, s))
         # per nucleon: isospin and nuclear suppression order the materials
         assert (sigma_1gev["carbon"] > sigma_1gev["iron"] > sigma_1gev["molybdenum"]
                 > sigma_1gev["tungsten"])

@@ -72,13 +72,12 @@ def test_internal_parameter_expressions_evaluate(ufo):
 
 def test_dy_lo_partonic_formula():
     from mcpsim.physics.constants import ALPHA_EM
-    from mcpsim.physics.dy_lo import GEV2_TO_PB, rpoint_check, sigma_partonic_pb
+    from mcpsim.physics.dy_lo import GEV2_TO_PB, sigma_partonic_pb
 
     # closed-form anchor at m = 0
     s = 100.0
     expected = 4 * np.pi * ALPHA_EM ** 2 / (3 * s) / 3.0 * GEV2_TO_PB
     assert sigma_partonic_pb(s, 0.0) == pytest.approx(expected, rel=1e-12)
-    assert rpoint_check() == pytest.approx(expected, rel=1e-12)
     # threshold closes and beta suppression is monotone
     assert sigma_partonic_pb(1.0, 0.6) == 0.0
     sig = sigma_partonic_pb(np.array([10.0, 100.0]), 0.5)

@@ -25,16 +25,16 @@ from ..model import ProductionResult  # noqa: E402
 from ..physics import sensitivity  # noqa: E402
 from .style import family_colors, log_decades, paper_style, pot_tex, save  # noqa: E402
 
-# (filename, label, mass-unit-is-MeV) for the existing-constraint overlays.
-CONSTRAINTS: List[Tuple[str, str, bool]] = [
-    ("MiniBooNE.csv", "MiniBooNE", False),
-    ("SLACmQ.csv", "SLAC mQ", False),
-    ("BEBC.csv", "BEBC", False),
-    ("LSND.csv", "LSND", False),
-    ("CHARMII.csv", "CHARM II", False),
-    ("ArgoNeuT.csv", "ArgoNeuT", False),
-    ("SENSEI_POLISHED.csv", "SENSEI", True),
-    ("milliQanRun3Fix.csv", "milliQan", False),
+# (filename, mass-unit-is-MeV) for the existing-constraint overlays.
+CONSTRAINTS: List[Tuple[str, bool]] = [
+    ("MiniBooNE.csv", False),
+    ("SLACmQ.csv", False),
+    ("BEBC.csv", False),
+    ("LSND.csv", False),
+    ("CHARMII.csv", False),
+    ("ArgoNeuT.csv", False),
+    ("SENSEI_POLISHED.csv", True),
+    ("milliQanRun3Fix.csv", False),
 ]
 # Sequential single-hue ramp for ordered off-axis positions (light -> dark).
 OFFAXIS_RAMP = ["#B3CDE8", "#7FAFDA", "#4E8FC7", "#2A6BAB", "#0F4C81"]
@@ -166,15 +166,15 @@ def _cl_note(ax, cfg: Config, extra: str = "") -> None:
             fontsize=13, color="0.25")
 
 
-def _draw_constraints(ax, y_top: float = Y_TOP):
+def _draw_constraints(ax):
     """Shade the union of existing constraints as one grey region. Returns
     (m_grid, envelope), envelope None when no contour file was found, so
     callers can fold it into their axis ranges."""
     m_grid = np.logspace(np.log10(0.0009916136673313), np.log10(11.3), 800)
-    env = np.full_like(m_grid, y_top)
+    env = np.full_like(m_grid, Y_TOP)
     found = False
     contours_dir = paths.contours_dir()
-    for fname, _label, is_mev in CONSTRAINTS:
+    for fname, is_mev in CONSTRAINTS:
         arr = _load_csv(contours_dir / fname)
         if arr is None:
             continue
@@ -188,11 +188,11 @@ def _draw_constraints(ax, y_top: float = Y_TOP):
         order = np.argsort(x[valid])
         xl, yl = np.log10(x[valid][order]), np.log10(y[valid][order])
         yq = 10 ** np.interp(np.log10(m_grid), xl, yl,
-                             left=np.log10(y_top), right=np.log10(y_top))
+                             left=np.log10(Y_TOP), right=np.log10(Y_TOP))
         env = np.minimum(env, yq)
     if not found:
         return m_grid, None
-    ax.fill_between(m_grid, env, y_top, color="lightgray", alpha=0.7,
+    ax.fill_between(m_grid, env, Y_TOP, color="lightgray", alpha=0.7,
                     label="Existing constraints", zorder=1)
     return m_grid, env
 

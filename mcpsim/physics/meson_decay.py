@@ -10,8 +10,6 @@ separately in sensitivity.py.
 
 from __future__ import annotations
 
-from typing import Dict
-
 import numpy as np
 from scipy.integrate import quad
 

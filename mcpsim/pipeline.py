@@ -23,7 +23,6 @@ from .plotting.production import plot_production
 
 
 def run_pipeline(cfg: Config, *, regenerate: bool = False,
-                 channels: Optional[List[str]] = None,
                  out_dir: Optional[Path] = None,
                  mass_subset: Optional[int] = None,
                  gen_opts: Optional[dict] = None,
@@ -34,8 +33,6 @@ def run_pipeline(cfg: Config, *, regenerate: bool = False,
     `plots` selects which figures to draw; the numeric tables and the run
     record are always written."""
     cfg = run_config(cfg)
-    if channels:
-        cfg = replace(cfg, channels=list(channels))
     tag = cfg.tag
     # Resolve to absolute so generated-data paths survive resolve_data (which
     # otherwise interprets relative paths against the source repo).

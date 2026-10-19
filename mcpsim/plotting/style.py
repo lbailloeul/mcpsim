@@ -86,13 +86,12 @@ def family_colors(family: str, used: set) -> tuple:
     return pair
 
 
-def save(fig, output, png: bool = True):
+def save(fig, output):
     """Save as PDF (the given path) and a PNG next to it, like the paper."""
     from pathlib import Path
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, bbox_inches="tight", pad_inches=0.1)
-    if png:
-        fig.savefig(output.with_suffix(".png"), dpi=200, bbox_inches="tight", pad_inches=0.1)
+    fig.savefig(output.with_suffix(".png"), dpi=200, bbox_inches="tight", pad_inches=0.1)
     plt.close(fig)
     return output

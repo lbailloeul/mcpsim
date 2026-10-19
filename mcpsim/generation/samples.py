@@ -122,10 +122,6 @@ def load_parents(cfg: Config, meson: str, *, quick: bool = False
             f"Generate samples for this energy (`mcpsim generate mesons`, needs "
             f"PYTHIA) and point engine.samples_dir at them."
         )
-    common.require_module(
-        "uproot",
-        "uproot is a core dependency as of mcpsim 0.2 — `pip install -e .`.",
-    )
     import uproot
 
     from ..physics.constants import MESONS

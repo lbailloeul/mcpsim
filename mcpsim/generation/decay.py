@@ -96,7 +96,6 @@ def _run_dalitz_scan(cfg: Config, meson: str, source: Path, mass_grid: np.ndarra
     src = paths.legacy_dir() / "lanl_decayPion_12bar.cc"
     binary = common.compile_cpp(src, paths.CACHE_DIR / "bin" / "lanl_decayPion_12bar")
 
-    work_dir.mkdir(parents=True, exist_ok=True)
     det = cfg.detector
     mother = _MOTHER_MASS_GEV[meson]
     out_acc = work_dir / f"acceptance_{meson}.txt"
@@ -178,7 +177,6 @@ def _run_vector_meson_scan(cfg: Config, meson: str, source: Path,
     output); hits/totals are counted from the output trees with uproot and
     summed across files, so multi-file sources combine exactly.
     """
-    common.require_module("uproot", "uproot is a core dependency — pip install -e .")
     import uproot
 
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -235,7 +233,6 @@ def _as_text_source(source: Path, work_dir: Path, meson: str) -> Path:
     C++ binary as if it were a text file."""
     if source.is_file() and source.suffix != ".root":
         return source
-    common.require_module("uproot", "uproot is a core dependency — pip install -e .")
     import uproot
 
     out = work_dir / f"{meson}_source.txt"

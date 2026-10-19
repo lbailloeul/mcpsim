@@ -73,14 +73,6 @@ def contours_dir() -> Path:
     return source_repo() / "experiment-contours-small"
 
 
-def brem_darkquest_dir() -> Path:
-    return source_repo() / "DarkQuest-brem-backup"
-
-
-def brem_ship_dir() -> Path:
-    return source_repo() / "SHiP-brem-backup"
-
-
 def mesongen_dir() -> Path:
     """Source-repo home of the archived PYTHIA parent samples (output-data/)."""
     return source_repo() / "mesongen-backup"

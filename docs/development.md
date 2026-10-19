@@ -28,7 +28,6 @@ mcpsim/
     madgraph.py     DY generation + LHE/cross-section parsers
   validation/
     parity.py       Tests A/B/C vs the legacy C++  (python -m mcpsim.validation.parity)
-    dy_audit.py     DY tiers 1-2                    (python -m mcpsim.validation.dy_audit)
   plotting/         production/limit plots + off-axis overlays + constraints
 ```
 
@@ -55,10 +54,9 @@ and `decay._patched_vector_meson_binary`.
   delta quantified in the fidelity table in `docs/physics.md`.
 - Engine changes must keep the parity harness within |z| ≤ 3
   (`pytest -m parity`, or `python -m mcpsim.validation.parity --quick`).
-  Both run as modules (`python -m mcpsim.validation.parity`,
-  `python -m mcpsim.validation.dy_audit`) rather than as `mcpsim` subcommands:
-  anyone can run them, they are just kept off the user-facing CLI because they
-  answer development questions, not analysis ones.
+  The harness runs as a module (`python -m mcpsim.validation.parity`) rather
+  than as an `mcpsim` subcommand: anyone can run it, it is just kept off the
+  user-facing CLI because it answers development questions, not analysis ones.
 
 ## Tests
 

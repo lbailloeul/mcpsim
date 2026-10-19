@@ -201,11 +201,3 @@ def acceptance_per_chi(m_chi: float, energy_gev: float, beam_pdf: PDF, target_pd
     else:
         frac = face_fraction(beta, rapidity, hit_fraction, distance_m)
     return float(np.sum(dsigma * frac) / np.sum(dsigma))
-
-
-def rpoint_check() -> float:
-    """Reference value: sigma(q qbar -> chi chibar) at s_hat = 100 GeV^2,
-    m_chi = 0, eps = 1, e_q = 1 — equals sigma(e+e- -> mu+ mu-)/3 there.
-    Used by the test suite as a closed-form anchor."""
-    s = 100.0
-    return float(4.0 * np.pi * ALPHA_EM ** 2 / (3.0 * s) / N_C * GEV2_TO_PB)

@@ -271,9 +271,8 @@ The **original UFO model is recovered** — the paper's Zenodo record
 `Mchi` in MASS[31], millicharge `qX` in FRBlock[1]; couples to γ *and* Z,
 though the Z is irrelevant at these masses). Point `MCPSIM_MCP_MODEL` at its
 unzipped directory for exact reruns; the in-repo `models/mcp_ufo` is the
-minimal QED-only recreation with the same χ pdg. See the DY audit
-(`python -m mcpsim.validation.dy_audit`, a development tool) and
-[data.md](data.md) for the open provenance items.
+minimal QED-only recreation with the same χ pdg. See [data.md](data.md) for
+the open provenance items.
 By default the DY acceptance is the tables' LO acceptance of the **preset's
 face**; unlike the meson channels it is not recomputed for custom or off-axis
 detectors (the run warns).

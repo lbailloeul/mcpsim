@@ -1,5 +1,3 @@
-import numpy as np
-
 from mcpsim import list_presets, load_preset
 from mcpsim.config import _FloatLoader
 import yaml

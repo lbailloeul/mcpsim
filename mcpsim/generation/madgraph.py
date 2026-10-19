@@ -376,6 +376,7 @@ def prepare_condor_dy(cfg: Config, masses: np.ndarray, work_dir: Path, *,
     dy_cross, dy_ageo = _scan_paths(cfg, work_dir)
     (work_dir / "README_condor.txt").write_text(_DY_CONDOR_README.format(
         n_masses=masses.size, name=cfg.name, energy=cfg.beam.energy_gev, nevents=nevents,
+        pdf_set=DY_PDF_SET, lhaid=DY_PDF_LHAID,
         workdir=work_dir, dy_cross=dy_cross, dy_ageo=dy_ageo,
         mg5_line=(f"The jobs use MG5_DIR = {mg5_dir}\n   (the one on PATH when "
                   f"this bundle was written), else mg5_aMC on PATH." if mg5_dir else
@@ -584,7 +585,7 @@ queue {n_masses}
 
 _DY_CONDOR_README = """\
 mcpsim Drell-Yan bundle: {n_masses} jobs, one per mass in dy_masses.txt, for
-{name} ({energy:g} GeV beam): MadGraph LO q q~ > chi chi~ with nCTEQ15_56_26
+{name} ({energy:g} GeV beam): MadGraph LO q q~ > chi chi~ with {pdf_set}
 for both beams, {nevents} events per mass. Run it from a shared filesystem
 (AFS/EOS) on lxplus.cern.ch: the jobs cd to {workdir}
 (override with DY_WORKDIR if you move the bundle), build their MadGraph
@@ -598,15 +599,15 @@ the defaults at the top of run_dy_job.sh, or in dy.sub as
    The jobs source an LCG view first; its lhapdf-config is what MadGraph's
    default setting (lhapdf_py3 = lhapdf-config) finds.
 
-2. The PDF set nCTEQ15_56_26 (LHAPDF id 100600). LHAPDF >= 6.5 rejects its
+2. The PDF set {pdf_set} (LHAPDF id {lhaid}). LHAPDF >= 6.5 rejects its
    .info file, which predates two keys it now requires, so give the jobs a
    patched copy in lhapdf/ here (used first). Once:
      source /cvmfs/sft.cern.ch/lcg/views/LCG_106/x86_64-el9-gcc13-opt/setup.sh
      mkdir -p lhapdf && cd lhapdf
      cp "$(lhapdf-config --datadir)/pdfsets.index" .
-     curl -L https://lhapdfsets.web.cern.ch/current/nCTEQ15_56_26.tar.gz | tar xz
-     grep -q AlphaS_NumFlavors nCTEQ15_56_26/nCTEQ15_56_26.info ||
-       printf '\\nAlphaS_FlavorScheme: variable\\nAlphaS_NumFlavors: 5\\n' >> nCTEQ15_56_26/nCTEQ15_56_26.info
+     curl -L https://lhapdfsets.web.cern.ch/current/{pdf_set}.tar.gz | tar xz
+     grep -q AlphaS_NumFlavors {pdf_set}/{pdf_set}.info ||
+       printf '\\nAlphaS_FlavorScheme: variable\\nAlphaS_NumFlavors: 5\\n' >> {pdf_set}/{pdf_set}.info
      cd ..
 
 3. Python with mcpsim. {python_step}
