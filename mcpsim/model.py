@@ -23,13 +23,17 @@ from .physics import drellyan, meson_decay
 
 @dataclass
 class ProductionResult:
-    """All computed channels on the config's mass grid.
+    """All computed channels on the config's mass grid, with `config`, the
+    configuration the run modelled (run_config of the one compute_production
+    was given): tables and plots describe the run from it, so a result is
+    never paired with a config it was not computed for.
 
     Yields are baseline N_chi/eps^2 (the eps dependence is applied later by
     physics/sensitivity). meson_channels maps meson name -> yield array;
     brem_low/central/high are the Lambda_p = 1.0/1.5/2.0 GeV band (central
     enters `total`). `warnings` carries every degradation/skip message and is
     printed by the CLI at the end of the run."""
+    config: Config
     masses: np.ndarray
     meson_channels: Dict[str, np.ndarray] = field(default_factory=dict)
     brem_central: np.ndarray = None
@@ -120,7 +124,7 @@ def compute_production(cfg: Config) -> ProductionResult:
     cfg = run_config(cfg)
     grid = load_mass_grid(cfg)
     channels, warnings = _active_channels(cfg)
-    result = ProductionResult(masses=grid, warnings=list(cfg.notes) + warnings)
+    result = ProductionResult(config=cfg, masses=grid, warnings=list(cfg.notes) + warnings)
 
     if "meson_decay" in channels:
         _add_meson_channels(cfg, grid, result)

@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from .. import paths  # noqa: E402
-from ..config import Config, run_config  # noqa: E402
+from ..config import Config  # noqa: E402
 from ..model import ProductionResult  # noqa: E402
 from ..physics import sensitivity  # noqa: E402
 from .style import family_colors, log_decades, paper_style, pot_tex, save  # noqa: E402
@@ -42,32 +42,31 @@ X_MAX_GEV = 11.2                 # the paper's upper mass edge
 Y_TOP = 2.0
 
 
-def limit_curves(cfg: Config, result: ProductionResult):
+def limit_curves(result: ProductionResult):
     """(eps with all channels, eps without proton brem or None) on the mass grid."""
-    s, brem = cfg.sensitivity, result.brem_central
+    s, brem = result.config.sensitivity, result.brem_central
     no_brem = (sensitivity.exclusion_contour(result.total - brem, s)
                if brem is not None and brem.sum() > 0 else None)
     return sensitivity.exclusion_contour(result.total, s), no_brem
 
 
-def plot_limit(cfg: Config, result: ProductionResult, output: str | Path) -> Path:
+def plot_limit(result: ProductionResult, output: str | Path) -> Path:
     """One run over the existing constraints (PDF + PNG). Returns the PDF path."""
-    return plot_limit_compare([(cfg, result)], output)
+    return plot_limit_compare([result], output)
 
 
-def plot_limit_compare(runs: Sequence[Tuple[Config, ProductionResult]],
-                       output: str | Path) -> Path:
+def plot_limit_compare(results: Sequence[ProductionResult], output: str | Path) -> Path:
     """Several runs on one exclusion plot, each solid with all channels and
     dashed without proton brem (the paper's DarkQuest + SHiP figure)."""
-    runs = [(run_config(c), r) for c, r in runs]
     with paper_style():
         fig, ax = plt.subplots(figsize=(11, 8))
         _draw_constraints(ax)
         used: set = set()
         reach = []
-        for cfg, result in runs:
+        for result in results:
+            cfg = result.config
             solid, light = family_colors(cfg.family, used)
-            eps, eps_no_brem = limit_curves(cfg, result)
+            eps, eps_no_brem = limit_curves(result)
             label = f"{cfg.name}: {pot_tex(cfg.beam.n_pot)} POT"
             if eps_no_brem is not None:
                 _curve(ax, result.masses, eps_no_brem, light, 1.8, (0, (4, 2.5)),
@@ -76,25 +75,26 @@ def plot_limit_compare(runs: Sequence[Tuple[Config, ProductionResult]],
             ok = _curve(ax, result.masses, eps, solid, 2.4, "-", label)
             if ok is not None:
                 reach.append(ok)
-        _frame(ax, runs, reach)
+        _frame(ax, results, reach)
         ax.legend(loc="upper left", fontsize=14, framealpha=1, edgecolor="0.8")
         fig.tight_layout()
         return save(fig, output)
 
 
-def plot_limit_overlay(cfg: Config, runs, out_dir: Path) -> Path:
-    """eps(m) for an off-axis scan, light to dark with angle, over the
-    constraints, with the view following the curves.
-
-    `runs` is a list of (angle_mrad, cfg_at_angle, ProductionResult)."""
+def plot_limit_overlay(cfg: Config, results: Sequence[ProductionResult],
+                       out_dir: Path) -> Path:
+    """eps(m) for an off-axis scan of `cfg`, one result per angle, light to
+    dark with angle, over the constraints, with the view following the
+    curves."""
     with paper_style():
         fig, ax = plt.subplots(figsize=(9, 6.5))
         env_m, env_y = _draw_constraints(ax)
-        colors = (OFFAXIS_RAMP if len(runs) <= len(OFFAXIS_RAMP)
-                  else [plt.get_cmap("Blues")(x) for x in np.linspace(0.35, 0.95, len(runs))])
+        colors = (OFFAXIS_RAMP if len(results) <= len(OFFAXIS_RAMP)
+                  else [plt.get_cmap("Blues")(x) for x in np.linspace(0.35, 0.95, len(results))])
         curves = []
-        for color, (angle, cfg_a, result) in zip(colors, runs):
-            eps, _ = limit_curves(cfg_a, result)
+        for color, result in zip(colors, results):
+            eps, _ = limit_curves(result)
+            angle = result.config.detector.offaxis_mrad
             if _curve(ax, result.masses, eps, color, 2.0, "-", f"{angle:g} mrad off axis") is not None:
                 curves.append((result.masses[np.isfinite(eps)], eps[np.isfinite(eps)]))
         ax.set_xscale("log")
@@ -132,17 +132,17 @@ def _curve(ax, m, eps, color, lw, ls, label) -> Optional[float]:
     return float(m[ok].max())
 
 
-def _frame(ax, runs, reach: List[float]) -> None:
-    cfg0 = runs[0][0]
+def _frame(ax, results: Sequence[ProductionResult], reach: List[float]) -> None:
+    cfg0 = results[0].config
     s = cfg0.sensitivity
-    m_min = min(float(r.masses.min()) for _, r in runs)
-    m_max = max(float(r.masses.max()) for _, r in runs)
+    m_min = min(float(r.masses.min()) for r in results)
+    m_max = max(float(r.masses.max()) for r in results)
     # the paper's 11.2 GeV edge, or close in on a curve that ends early
     xhi = min(X_MAX_GEV, m_max * 1.6, 1.5 * max(reach)) if reach else m_max
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(max(1e-3, m_min), xhi)
-    ax.set_ylim(min(c.sensitivity.charge_min for c, _ in runs), s.charge_max)
+    ax.set_ylim(min(r.config.sensitivity.charge_min for r in results), s.charge_max)
     log_decades(ax, "x")
     log_decades(ax, "y")
     ax.set_xlabel(r"$m_{\chi}$ [$\mathrm{GeV}/\mathrm{c}^2$]", fontsize=22)

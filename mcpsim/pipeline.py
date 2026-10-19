@@ -46,13 +46,13 @@ def run_pipeline(cfg: Config, *, regenerate: bool = False,
 
     written: List[Path] = []
     if "production" in plots:
-        written.append(plot_production(cfg, result, out_dir / f"production_{tag}.pdf"))
+        written.append(plot_production(result, out_dir / f"production_{tag}.pdf"))
     if "limit" in plots:
-        written.append(plot_limit(cfg, result, out_dir / f"limit_{tag}.pdf"))
-    return result, written + write_tables(cfg, result, out_dir)
+        written.append(plot_limit(result, out_dir / f"limit_{tag}.pdf"))
+    return result, written + write_tables(result, out_dir)
 
 
-def write_tables(cfg: Config, result: ProductionResult, out_dir: Path) -> List[Path]:
+def write_tables(result: ProductionResult, out_dir: Path) -> List[Path]:
     """Write the numeric results next to the plots.
 
     production_<tag>.txt: mass plus the baseline yield (N_chi/eps^2) per
@@ -62,6 +62,7 @@ def write_tables(cfg: Config, result: ProductionResult, out_dir: Path) -> List[P
     """
     from .physics import sensitivity
 
+    cfg = result.config
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     tag = cfg.tag
@@ -99,18 +100,18 @@ def write_tables(cfg: Config, result: ProductionResult, out_dir: Path) -> List[P
                f"stronger there. Lower sensitivity.charge_min.")
         if msg not in result.warnings:
             result.warnings.append(msg)
-    curve_path = write_limit_curve(cfg, result.masses, eps95, floor, out_dir)
+    curve_path = write_limit_curve(result, eps95, floor, out_dir)
     return [prod_path, lim_path, curve_path, write_run_record(cfg, out_dir)]
 
 
-def write_limit_curve(cfg: Config, masses: np.ndarray, eps: np.ndarray, floor: float,
+def write_limit_curve(result: ProductionResult, eps: np.ndarray, floor: float,
                       out_dir: Path) -> Path:
     """limit_curve_<tag>.txt: the exclusion boundary alone, for collaborators to
     replot — the masses where the threshold is reached, with a header that
     says what the curve is. Whitespace columns with '#' comments, so it loads
     with np.loadtxt, ROOT's TGraph or gnuplot as it is."""
     from . import __version__, geometry
-    cfg = run_config(cfg)
+    cfg, masses = result.config, result.masses
     s, b = cfg.sensitivity, cfg.beam
     ok = np.isfinite(eps)
     n_floor = int(np.sum(ok & (eps <= floor)))

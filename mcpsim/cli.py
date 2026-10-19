@@ -375,7 +375,7 @@ def _execute(cfg: Config, *, out, channels, offaxis, plots: Sequence[str],
                                            mass_subset=mass_subset, gen_opts=gen_opts,
                                            plots=plots)
         _report(cfg_a, written, result.warnings)
-        runs.append((cfg_a.detector.offaxis_mrad, cfg_a, result))
+        runs.append(result)
 
     if len(runs) > 1:
         from .plotting.limits import plot_limit_overlay
@@ -468,10 +468,10 @@ def compare_cmd(presets, configs, out, channels, engine, fidelity, seed, quick,
             cfg = replace(cfg, channels=_split(channels))
         with _clean_errors():
             result = compute_production(cfg)
-            written = write_tables(cfg, result, out_dir)
+            written = write_tables(result, out_dir)
         _report(cfg, written, result.warnings)
-        runs.append((cfg, result))
-    name = "_vs_".join(c.tag for c, _ in runs)
+        runs.append(result)
+    name = "_vs_".join(r.config.tag for r in runs)
     click.echo(f"  wrote {plot_limit_compare(runs, out_dir / f'limit_compare_{name}.pdf')}")
 
 

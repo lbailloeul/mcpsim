@@ -34,13 +34,15 @@ def test_figures_write_pdf_and_png(mini_config, tmp_path):
     from mcpsim.plotting.limits import plot_limit, plot_limit_compare, plot_limit_overlay
     from mcpsim.plotting.production import plot_production, plot_production_overlay
     res = compute_production(mini_config)
-    paths = [plot_production(mini_config, res, tmp_path / "production.pdf"),
-             plot_limit(mini_config, res, tmp_path / "limit.pdf"),
-             plot_limit_compare([(mini_config, res), (replace(mini_config, name="mini 2"), res)],
+    paths = [plot_production(res, tmp_path / "production.pdf"),
+             plot_limit(res, tmp_path / "limit.pdf"),
+             plot_limit_compare([res, replace(res, config=replace(res.config, name="mini 2"))],
                                 tmp_path / "compare.pdf")]
-    runs = [(a, replace(mini_config, name=f"mini {a}"), res) for a in (0.0, 2.0)]
-    paths += [plot_production_overlay(mini_config, runs, tmp_path),
-              plot_limit_overlay(mini_config, runs, tmp_path)]
+    scan = [replace(res, config=replace(res.config, name=f"mini {a}",
+                                        detector=replace(res.config.detector, offaxis_mrad=a)))
+            for a in (0.0, 2.0)]
+    paths += [plot_production_overlay(mini_config, scan, tmp_path),
+              plot_limit_overlay(mini_config, scan, tmp_path)]
     for p in paths:
         assert p.exists() and p.with_suffix(".png").exists(), p
 
@@ -49,9 +51,9 @@ def test_limit_curves_without_brem(mini_config):
     from mcpsim.model import compute_production
     from mcpsim.plotting.limits import limit_curves
     res = compute_production(mini_config)
-    eps, no_brem = limit_curves(mini_config, res)
+    eps, no_brem = limit_curves(res)
     assert no_brem is not None
     ok = np.isfinite(eps) & np.isfinite(no_brem)
     assert np.all(eps[ok] <= no_brem[ok])            # brem only adds signal
     res.brem_central = None
-    assert limit_curves(mini_config, res)[1] is None
+    assert limit_curves(res)[1] is None

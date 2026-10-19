@@ -182,7 +182,7 @@ def test_limit_floor_warning_and_run_record(mini_config, tmp_path):
     sens = replace(mini_config.sensitivity, charge_min=0.5, charge_max=1.0, n_charge=10)
     cfg = replace(mini_config, sensitivity=sens)
     result = compute_production(cfg)
-    written = write_tables(cfg, result, tmp_path)
+    written = write_tables(result, tmp_path)
     # Already above threshold at charge_min: the table value is a floor.
     assert any("bottom of the charge scan" in w for w in result.warnings)
     record = tmp_path / f"run_{cfg.tag}.yaml"
@@ -201,16 +201,29 @@ def test_the_limit_table_and_the_limit_plot_show_the_same_limit(mini_config, tmp
     sens = replace(mini_config.sensitivity, n_chi_threshold=10.0, n_charge=50)
     for cfg in (mini_config, replace(mini_config, sensitivity=sens)):
         result = compute_production(cfg)
-        write_tables(cfg, result, tmp_path)
+        write_tables(result, tmp_path)
         table = np.loadtxt(tmp_path / f"limit_{cfg.tag}.txt")
-        np.testing.assert_allclose(table[:, 1], limit_curves(cfg, result)[0], rtol=1e-7)
+        np.testing.assert_allclose(table[:, 1], limit_curves(result)[0], rtol=1e-7)
+
+
+def test_a_result_carries_the_detector_its_run_modelled(mini_config, tmp_path):
+    from mcpsim.config import DetectorConfig
+    from mcpsim.model import compute_production
+    from mcpsim.pipeline import write_tables
+    paper = DetectorConfig(type="cylindrical", radius_m=0.3, distance_m=40.0)
+    cfg = replace(mini_config, legacy_detector=paper,
+                  engine=replace(mini_config.engine, fidelity="legacy"))
+    result = compute_production(cfg)
+    assert result.config.detector == paper
+    write_tables(result, tmp_path)
+    assert "Detector: r = 0.3 m disc at 40 m" in (tmp_path / f"limit_curve_{cfg.tag}.txt").read_text()
 
 
 def test_limit_curve_file_for_collaborators(mini_config, tmp_path):
     from mcpsim.model import compute_production
     from mcpsim.pipeline import write_tables
     result = compute_production(mini_config)
-    written = write_tables(mini_config, result, tmp_path)
+    written = write_tables(result, tmp_path)
     curve = tmp_path / f"limit_curve_{mini_config.tag}.txt"
     assert curve in written
     text = curve.read_text()

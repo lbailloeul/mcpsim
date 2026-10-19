@@ -31,7 +31,7 @@ def test_legacy_fidelity_reproduces_golden(preset, tmp_path):
     cfg = load_preset(preset)
     cfg = replace(cfg, engine=replace(cfg.engine, fidelity="legacy"))
     result = compute_production(cfg)
-    write_tables(cfg, result, tmp_path)
+    write_tables(result, tmp_path)
     for kind in ("production", "limit"):
         new = np.loadtxt(tmp_path / f"{kind}_{cfg.tag}.txt")
         gold = np.loadtxt(GOLDEN / cfg.tag / f"{kind}_{cfg.tag}.txt")

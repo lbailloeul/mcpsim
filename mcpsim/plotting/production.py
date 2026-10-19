@@ -14,6 +14,7 @@ it hides the Upsilon line).
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Sequence
 
 import matplotlib
 
@@ -22,7 +23,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from .. import geometry  # noqa: E402
-from ..config import Config, run_config  # noqa: E402
+from ..config import Config  # noqa: E402
 from ..model import ProductionResult  # noqa: E402
 from ..physics.constants import MESONS  # noqa: E402
 from .style import log_decades, paper_style, pot_tex, save  # noqa: E402
@@ -34,9 +35,9 @@ DY_LABEL = r"$q\overline{q}\to\gamma^{*}\to\chi\overline{\chi}$"
 DY_PLOT_FROM_GEV = 1.0          # half the 2 GeV pair-mass cut of the DY inputs
 
 
-def plot_production(cfg: Config, result: ProductionResult, output: str | Path) -> Path:
+def plot_production(result: ProductionResult, output: str | Path) -> Path:
     """Render and save the production plot (PDF + PNG). Returns the PDF path."""
-    cfg = run_config(cfg)
+    cfg = result.config
     m = result.masses
     with paper_style():
         fig, ax = plt.subplots(figsize=(8.09, 5))
@@ -79,19 +80,19 @@ def plot_production(cfg: Config, result: ProductionResult, output: str | Path) -
         return save(fig, output)
 
 
-def plot_production_overlay(cfg: Config, runs, out_dir: Path) -> Path:
-    """Total production for an off-axis scan, light to dark with angle.
-
-    `runs` is a list of (angle_mrad, cfg_at_angle, ProductionResult)."""
+def plot_production_overlay(cfg: Config, results: Sequence[ProductionResult],
+                            out_dir: Path) -> Path:
+    """Total production for an off-axis scan of `cfg`, one result per angle,
+    light to dark with angle."""
     from .limits import OFFAXIS_RAMP
 
     with paper_style():
         fig, ax = plt.subplots(figsize=(8.09, 5.5))
-        colors = (OFFAXIS_RAMP if len(runs) <= len(OFFAXIS_RAMP)
-                  else [plt.get_cmap("Blues")(x) for x in np.linspace(0.35, 0.95, len(runs))])
-        for color, (angle, _cfg_a, result) in zip(colors, runs):
+        colors = (OFFAXIS_RAMP if len(results) <= len(OFFAXIS_RAMP)
+                  else [plt.get_cmap("Blues")(x) for x in np.linspace(0.35, 0.95, len(results))])
+        for color, result in zip(colors, results):
             ax.plot(result.masses, _positive(result.total), color=color, lw=2,
-                    label=f"{angle:g} mrad")
+                    label=f"{result.config.detector.offaxis_mrad:g} mrad")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(r"$m_{\chi}\, [\mathrm{GeV}/c^{2}]$", fontsize=18)

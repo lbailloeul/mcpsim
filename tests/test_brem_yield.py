@@ -129,7 +129,7 @@ def _brem_warnings(cfg, grids):
     from mcpsim import model
     cfg = replace(cfg, data=replace(cfg.data, brem_dir=str(grids)))
     grid = np.array([0.01, 0.1])
-    res = model.ProductionResult(masses=grid)
+    res = model.ProductionResult(config=cfg, masses=grid)
     model._add_brem(cfg, grid, res)
     return [w for w in res.warnings if "not accurate above" in w]
 
