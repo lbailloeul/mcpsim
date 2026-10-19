@@ -109,9 +109,12 @@ _engine_opts = [
 ]
 
 
-def _apply_engine(cfg: Config, engine, fidelity, seed, quick, ngamma=None,
-                  target=None) -> Config:
-    """Overlay CLI engine/sensitivity/target flags onto the config."""
+def _config(preset: Optional[str], config: Optional[str], *, channels=None, engine=None,
+            fidelity=None, seed=None, quick=False, ngamma=None, target=None) -> Config:
+    """The config a command runs: --preset or --config (_resolve) with the
+    target, engine, sensitivity and channel options on top, as the run
+    models it."""
+    cfg = _resolve(preset, config)
     if target is not None:
         try:
             name = normalize_target(target)
@@ -140,7 +143,17 @@ def _apply_engine(cfg: Config, engine, fidelity, seed, quick, ngamma=None,
         # own name -> own output directory (darkquest_legacy/), so a legacy run
         # never overwrites the default one, and its plots say what they are
         cfg = replace(cfg, name=f"{cfg.name} {mode}")
-    return run_config(cfg)        # legacy on a preset -> the published detector
+    cfg = run_config(cfg)         # legacy on a preset -> the published detector
+    if channels:
+        cfg = replace(cfg, channels=_split(channels))
+    return cfg
+
+
+def _condor_opts(condor: bool, no_submit: bool) -> dict:
+    """The generation options --condor and --no-submit ask for."""
+    if no_submit and not condor:
+        raise click.UsageError("--no-submit only applies with --condor.")
+    return {"condor": True, "submit": not no_submit} if condor else {}
 
 
 def _with_offaxis(cfg: Config, angle_mrad: float) -> Config:
@@ -354,13 +367,11 @@ def presets_cmd() -> None:
                    f"{cfg.target.name:11s}  {cfg.detector.type:11s}  {cfg.name}")
 
 
-def _execute(cfg: Config, *, out, channels, offaxis, plots: Sequence[str],
+def _execute(cfg: Config, *, out, offaxis, plots: Sequence[str],
              regenerate: bool = False, mass_subset=None, gen_opts=None) -> None:
     """Shared body of run / production / limit: one pipeline run, or one per
     --offaxis angle plus overlay figures when there are several."""
     from .pipeline import run_pipeline
-    if channels:
-        cfg = replace(cfg, channels=_split(channels))
     try:
         angles = [float(x) for x in offaxis.split(",")] if offaxis else []
     except ValueError:
@@ -399,8 +410,7 @@ def _execute(cfg: Config, *, out, channels, offaxis, plots: Sequence[str],
                    "instead of locally.")
 @click.option("--no-submit", is_flag=True,
               help="With --condor, write the bundle but do not call condor_submit.")
-def run_cmd(preset, config, out, channels, engine, fidelity, seed, quick, ngamma,
-            target, offaxis, regenerate, mass_subset, condor, no_submit) -> None:
+def run_cmd(out, offaxis, regenerate, mass_subset, condor, no_submit, **source) -> None:
     """Compute and plot both the production and limit plots.
 
     Outputs (plots, numeric tables and a run_<tag>.yaml record of the resolved
@@ -411,31 +421,23 @@ def run_cmd(preset, config, out, channels, engine, fidelity, seed, quick, ngamma
     if mass_subset and not (regenerate or condor):
         raise click.UsageError("--mass-subset only applies with --regenerate/--condor "
                                "(fast mode always uses the full mass grid).")
-    if no_submit and not condor:
-        raise click.UsageError("--no-submit only applies with --condor.")
-    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
-    _execute(cfg, out=out, channels=channels, offaxis=offaxis,
-             plots=("production", "limit"), regenerate=regenerate or condor,
-             mass_subset=mass_subset,
-             gen_opts={"condor": True, "submit": not no_submit} if condor else None)
+    batch = _condor_opts(condor, no_submit)
+    _execute(_config(**source), out=out, offaxis=offaxis, plots=("production", "limit"),
+             regenerate=regenerate or condor, mass_subset=mass_subset, gen_opts=batch)
 
 
 @cli.command("production")
 @_options(*_common, _channels_opt, *_engine_opts, _offaxis_opt)
-def production_cmd(preset, config, out, channels, engine, fidelity, seed, quick,
-                   ngamma, target, offaxis) -> None:
+def production_cmd(out, offaxis, **source) -> None:
     """Compute and plot only the production plot."""
-    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
-    _execute(cfg, out=out, channels=channels, offaxis=offaxis, plots=("production",))
+    _execute(_config(**source), out=out, offaxis=offaxis, plots=("production",))
 
 
 @cli.command("limit")
 @_options(*_common, _channels_opt, *_engine_opts, _offaxis_opt)
-def limit_cmd(preset, config, out, channels, engine, fidelity, seed, quick,
-              ngamma, target, offaxis) -> None:
+def limit_cmd(out, offaxis, **source) -> None:
     """Compute and plot only the limit (exclusion) plot."""
-    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
-    _execute(cfg, out=out, channels=channels, offaxis=offaxis, plots=("limit",))
+    _execute(_config(**source), out=out, offaxis=offaxis, plots=("limit",))
 
 
 @cli.command("compare")
@@ -446,8 +448,7 @@ def limit_cmd(preset, config, out, channels, engine, fidelity, seed, quick,
 @click.option("--out", "-o", "out", default=None,
               help="Output directory [default: mcpsim-output/compare/].")
 @_options(_channels_opt, *_engine_opts)
-def compare_cmd(presets, configs, out, channels, engine, fidelity, seed, quick,
-                ngamma, target) -> None:
+def compare_cmd(presets, configs, out, **overrides) -> None:
     """Overlay the limits of several runs on one figure.
 
     Each run is drawn solid with all channels and dashed without proton brem
@@ -462,10 +463,7 @@ def compare_cmd(presets, configs, out, channels, engine, fidelity, seed, quick,
     out_dir = paths.output_dir(out, "compare")
     runs = []
     for preset, config in sources:
-        cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick,
-                            ngamma, target)
-        if channels:
-            cfg = replace(cfg, channels=_split(channels))
+        cfg = _config(preset, config, **overrides)
         with _clean_errors():
             result = compute_production(cfg)
             written = write_tables(result, out_dir)
@@ -496,20 +494,18 @@ def compare_cmd(presets, configs, out, channels, engine, fidelity, seed, quick,
                    "running locally.")
 @click.option("--no-submit", is_flag=True,
               help="With --condor, write the bundle but do not call condor_submit.")
-def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
-                 ngamma, target, mass_subset, trials, n_proc, brem_grid_size, brem_neval,
-                 brem_nitn, dy_nevents, condor, no_submit) -> None:
+def generate_cmd(step, out, mass_subset, trials, n_proc, brem_grid_size, brem_neval,
+                 brem_nitn, dy_nevents, condor, no_submit, **source) -> None:
     """Run a single heavy generation step (mesons / brem / dy).
 
     Exits non-zero when the step produced no outputs (e.g. a missing
     toolchain); the reason is printed as a warning.
     """
     from .pipeline import regenerate_inputs
-    if no_submit and not condor:
-        raise click.UsageError("--no-submit only applies with --condor.")
+    batch = _condor_opts(condor, no_submit)
     if condor and step == "mesons":
         raise click.UsageError("--condor applies to brem and dy.")
-    cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick, ngamma, target)
+    cfg = _config(**source)
     # Restrict to the one requested channel so only that backend runs.
     channel = normalize_channels([step])[0]
     cfg = replace(cfg, channels=[channel])
@@ -518,8 +514,7 @@ def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
         trials=trials, n_proc=n_proc, brem_grid_size=brem_grid_size,
         brem_neval=brem_neval, brem_nitn=brem_nitn, dy_nevents=dy_nevents).items()
         if v is not None}
-    if condor:
-        gen_opts.update(condor=True, submit=not no_submit)
+    gen_opts.update(batch)
     with _clean_errors():
         new_cfg, gen_warnings = regenerate_inputs(cfg, gen_dir, mass_subset, gen_opts)
     for w in gen_warnings:

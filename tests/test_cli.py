@@ -114,9 +114,9 @@ def test_mass_subset_requires_regenerate(runner):
     assert "--mass-subset only applies" in r.output
 
 
-def test_no_submit_requires_condor(runner):
-    r = runner.invoke(cli, ["generate", "brem", "--preset", "darkquest",
-                            "--no-submit"])
+@pytest.mark.parametrize("cmd", [["generate", "brem"], ["run"]])
+def test_no_submit_requires_condor(runner, cmd):
+    r = runner.invoke(cli, [*cmd, "--preset", "darkquest", "--no-submit"])
     assert r.exit_code != 0
     assert "--no-submit only applies" in r.output
 

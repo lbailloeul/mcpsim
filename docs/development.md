@@ -26,8 +26,10 @@ mcpsim/
     pydecay.py      the Python decay engine (samplers, kernel scan, cache)
     decay.py        cpp engine: lanl Dalitz + patched decayVectorMeson 2-body
     mesons.py       PYTHIA / Burman-Smith generation
-    brem_run.py     VEGAS brem (patch-a-copy) + Condor bundles
-    madgraph.py     DY generation + LHE/cross-section parsers
+    brem_run.py     VEGAS brem (patch-a-copy), locally or as a Condor bundle
+    madgraph.py     DY generation (locally or as a Condor bundle) + LHE parsers
+    condor.py       what both Condor bundles share: file names, LCG views,
+                    the job start, the submit file and submission
   validation/
     parity.py       Tests A/B/C vs the legacy C++  (python -m mcpsim.validation.parity)
   plotting/         production/limit plots + off-axis overlays + constraints
