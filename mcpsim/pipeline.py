@@ -16,7 +16,7 @@ import numpy as np
 
 from . import geometry, paths
 from .config import Config, mark_acceptance_supplied, run_config, run_record
-from .model import ProductionResult, compute_production, drell_yan_table
+from .model import ProductionResult, compute_production, drell_yan_table, load_mass_grid
 from .physics.constants import MESONS
 from .plotting.limits import plot_limit
 from .plotting.production import plot_production
@@ -34,9 +34,7 @@ def run_pipeline(cfg: Config, *, regenerate: bool = False,
     record are always written."""
     cfg = run_config(cfg)
     tag = cfg.tag
-    # Resolve to absolute so generated-data paths survive resolve_data (which
-    # otherwise interprets relative paths against the source repo).
-    out_dir = Path(out_dir).resolve() if out_dir else (paths.WORK_DIR / tag)
+    out_dir = paths.output_dir(out_dir, tag)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     gen_warnings: List[str] = []
@@ -183,7 +181,7 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
 
     opts = gen_opts or {}
     gen_dir.mkdir(parents=True, exist_ok=True)
-    grid = np.atleast_1d(np.loadtxt(paths.resolve_data(cfg.data.mass_grid)).astype(float))
+    grid = load_mass_grid(cfg)
     if mass_subset:
         grid = grid[:: max(1, grid.size // mass_subset)][:mass_subset]
 

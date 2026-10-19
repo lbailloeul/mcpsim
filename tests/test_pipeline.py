@@ -32,6 +32,13 @@ def test_the_engine_seed_reaches_the_cpp_binaries(mini_repo, tmp_path, monkeypat
     assert seeds == {"generatePion_12bar": {"777"}, "lanl_decayPion_12bar": {"777"}}
 
 
+def test_regenerating_with_a_missing_mass_grid_names_the_grid(mini_config, tmp_path):
+    import pytest
+    cfg = replace(mini_config, data=replace(mini_config.data, mass_grid="no_such_grid.txt"))
+    with pytest.raises(FileNotFoundError, match="mass grid 'no_such_grid.txt' not found"):
+        regenerate_inputs(cfg, tmp_path / "gen")
+
+
 def test_local_drell_yan_runs_madgraph_on_the_cores_asked_for(mini_config, tmp_path, monkeypatch):
     from mcpsim.generation import common, madgraph
     asked = []

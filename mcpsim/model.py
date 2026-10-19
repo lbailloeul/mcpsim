@@ -100,9 +100,8 @@ def _active_channels(cfg: Config) -> tuple[List[str], List[str]]:
     return channels, warnings
 
 
-def compute_production(cfg: Config) -> ProductionResult:
-    """Evaluate all configured channels on the config's mass grid."""
-    cfg = run_config(cfg)
+def load_mass_grid(cfg: Config) -> np.ndarray:
+    """The config's data.mass_grid, in GeV."""
     grid_path = paths.resolve_data(cfg.data.mass_grid)
     try:
         grid = np.loadtxt(grid_path).astype(float)
@@ -113,7 +112,13 @@ def compute_production(cfg: Config) -> ProductionResult:
             f"Check the data.mass_grid config value against the source repo at "
             f"{paths.source_repo()}."
         ) from exc
-    grid = np.atleast_1d(grid)
+    return np.atleast_1d(grid)
+
+
+def compute_production(cfg: Config) -> ProductionResult:
+    """Evaluate all configured channels on the config's mass grid."""
+    cfg = run_config(cfg)
+    grid = load_mass_grid(cfg)
     channels, warnings = _active_channels(cfg)
     result = ProductionResult(masses=grid, warnings=list(cfg.notes) + warnings)
 

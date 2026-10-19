@@ -32,6 +32,13 @@ WORK_DIR = ((PROJECT_ROOT if (PROJECT_ROOT / "pyproject.toml").exists() else Pat
             / "mcpsim-output")
 CACHE_DIR = WORK_DIR / "cache"
 
+
+def output_dir(out: Optional[str | Path], default_name: str) -> Path:
+    """Where a command writes: `out` made absolute, so generated-data paths
+    survive resolve_data (which reads a relative path against the source
+    repo), or WORK_DIR/<default_name> when no --out was given."""
+    return Path(out).resolve() if out else WORK_DIR / default_name
+
 _DEFAULT_SOURCE = PROJECT_ROOT.parent / "github-repo-scripts"
 _source_override: Optional[Path] = None
 

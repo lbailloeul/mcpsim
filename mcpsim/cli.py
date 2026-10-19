@@ -379,7 +379,7 @@ def _execute(cfg: Config, *, out, channels, offaxis, plots: Sequence[str],
     if len(runs) > 1:
         from .plotting.limits import plot_limit_overlay
         from .plotting.production import plot_production_overlay
-        base_dir = Path(out).resolve() if out else paths.WORK_DIR / cfg.tag
+        base_dir = paths.output_dir(out, cfg.tag)
         base_dir.mkdir(parents=True, exist_ok=True)
         overlays = {"production": plot_production_overlay, "limit": plot_limit_overlay}
         for name in plots:
@@ -458,7 +458,7 @@ def compare_cmd(presets, configs, out, channels, engine, fidelity, seed, quick,
     sources = [(p, None) for p in presets] + [(None, c) for c in configs]
     if not sources:
         raise click.UsageError("give at least one --preset or --config to compare.")
-    out_dir = Path(out).resolve() if out else paths.WORK_DIR / "compare"
+    out_dir = paths.output_dir(out, "compare")
     runs = []
     for preset, config in sources:
         cfg = _apply_engine(_resolve(preset, config), engine, fidelity, seed, quick,
@@ -512,7 +512,7 @@ def generate_cmd(step, preset, config, out, engine, fidelity, seed, quick,
     # Restrict to the one requested channel so only that backend runs.
     channel = normalize_channels([step])[0]
     cfg = replace(cfg, channels=[channel])
-    gen_dir = ((Path(out).resolve() if out else paths.WORK_DIR / cfg.tag) / "generated")
+    gen_dir = paths.output_dir(out, cfg.tag) / "generated"
     gen_opts = {k: v for k, v in dict(
         trials=trials, n_proc=n_proc, brem_grid_size=brem_grid_size,
         brem_neval=brem_neval, brem_nitn=brem_nitn, dy_nevents=dy_nevents).items()
