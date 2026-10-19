@@ -70,6 +70,20 @@ def test_internal_parameter_expressions_evaluate(ufo):
     assert abs(ns["ee"] ** 2 / (4 * np.pi) - 1 / 127.9) < 1e-12
 
 
+def test_madgraph_can_write_the_default_param_card(tmp_path):
+    # MadGraph 3.5.3 (LCG_106 on lxplus) copies the model to
+    # bin/internal/ufomodel and runs the model's own write_param_card.py there.
+    import shutil
+    import subprocess
+    model = tmp_path / "ufomodel"
+    shutil.copytree(MODELS / "mcp_ufo", model, ignore=shutil.ignore_patterns("__pycache__"))
+    subprocess.run([sys.executable, "write_param_card.py"], cwd=model, check=True,
+                   capture_output=True)
+    card = (model / "param_card.dat").read_text()
+    assert "Block MASS" in card
+    assert any(line.split()[:1] == ["31"] and "MCHI" in line for line in card.splitlines())
+
+
 def test_dy_lo_partonic_formula():
     from mcpsim.physics.constants import ALPHA_EM
     from mcpsim.physics.dy_lo import GEV2_TO_PB, sigma_partonic_pb
