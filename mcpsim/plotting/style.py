@@ -45,12 +45,12 @@ def paper_style():
 
 
 def pot_tex(n_pot: float) -> str:
-    """An exposure in mathtext: 1e20 -> '$10^{20}$', 3.8e20 -> '$3.8\\times10^{20}$'."""
-    exp = int(math.floor(math.log10(n_pot)))
-    mant = n_pot / 10 ** exp
-    if abs(mant - 1.0) < 1e-9:
-        return f"$10^{{{exp}}}$"
-    return f"${mant:.2g}\\times10^{{{exp}}}$"
+    """An exposure in mathtext, to two figures: 1e20 -> '$10^{20}$',
+    3.8e20 -> '$3.8\\times10^{20}$', 9.96e20 -> '$10^{21}$'."""
+    mant, exp = f"{n_pot:.1e}".split("e")
+    if float(mant) == 1.0:
+        return f"$10^{{{int(exp)}}}$"
+    return f"${float(mant):g}\\times10^{{{int(exp)}}}$"
 
 
 def log_decades(ax, axis: str = "x", every: int = 1, skip_low: bool = False) -> None:

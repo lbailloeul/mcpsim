@@ -13,6 +13,8 @@ def test_pot_tex():
     assert pot_tex(2e20) == r"$2\times10^{20}$"
     assert pot_tex(3.8e20) == r"$3.8\times10^{20}$"
     assert pot_tex(2e22) == r"$2\times10^{22}$"
+    assert pot_tex(9.96e20) == "$10^{21}$"          # two figures round up a decade
+    assert pot_tex(1.04e20) == "$10^{20}$"
 
 
 def test_endpoint_keeps_the_drop_and_blanks_the_start():
