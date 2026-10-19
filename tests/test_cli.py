@@ -201,7 +201,7 @@ def test_target_swap_by_keyword(runner, mini_repo, tmp_path):
     assert rec["config"]["target"]["A"] == 95.95
 
 
-def test_target_typo_suggests(runner):
+def test_target_typo_suggests(runner, mini_repo):
     r = runner.invoke(cli, ["run", "-p", "darkquest", "--target", "mobelium"])
     assert r.exit_code != 0
     assert "did you mean 'molybdenum'" in r.output

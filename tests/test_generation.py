@@ -8,8 +8,6 @@ from mcpsim import load_preset, paths
 from mcpsim.generation import brem_run, mesons
 from mcpsim.generation.madgraph import MCP_PDG_DEFAULT, parse_lhe_acceptance
 
-_SOURCE_REPO_PRESENT = paths.source_repo().exists()
-
 # Two-event LHE: a forward pair (both chi on the face), a wide-angle pair (none).
 _LHE = f"""\
 <LesHouchesEvents version="3.0">
@@ -85,13 +83,15 @@ def test_off_axis_face_counts_the_chi_aimed_at_its_centre(tmp_path, face):
     assert (chi_hits(at_face_centre), chi_hits(0.0)) == (1, 0)
 
 
-@pytest.mark.skipif(not _SOURCE_REPO_PRESENT, reason="source repo (mCP_brem.py) unavailable")
+def _patched_brem_script(cfg, work_dir):
+    """The mCP_brem.py copy a brem bundle for `cfg` hands the generator."""
+    brem_run.prepare_condor_brem(cfg, np.array([0.1]), work_dir, submit=False)
+    return (work_dir / "mCP_brem_patched.py").read_text()
+
+
 def test_brem_patcher_rewrites_globals(tmp_path):
     cfg = load_preset("ship")  # 400 GeV, molybdenum -> different globals than the script default
-    patched = brem_run._prepare_patched_script(cfg, tmp_path)
-    text = patched.read_text()
-    # Patched copy lives in the work dir, not the source repo.
-    assert patched.parent == tmp_path
+    text = _patched_brem_script(cfg, tmp_path)
     assert f"{cfg.beam.n_pot:.6e}" in text          # N_POT updated (2.000000e+20)
     assert "95.95" in text                           # molybdenum A
     # sqrt(s) recomputed for 400 GeV, no longer the 15.06 GeV default.
@@ -121,15 +121,17 @@ def test_condor_bundle(tmp_path):
     np.testing.assert_allclose(np.loadtxt(tmp_path / "brem_masses.txt"), [0.001, 0.05, 0.2])
 
 
-def test_generator_face():
+def test_the_brem_generator_gets_a_square_on_axis_face(tmp_path):
     from dataclasses import replace
-    face = load_preset("darkquest").detector
-    assert brem_run._generator_face(face) == (20, 0.05)
-    assert brem_run._generator_face(load_preset("darkquest").legacy_detector) == (20, 0.05)
+    dq = load_preset("darkquest")
+    for name, cfg in (("face", dq), ("disc", replace(dq, detector=dq.legacy_detector))):
+        text = _patched_brem_script(cfg, tmp_path / name)     # 20 x 20 bars of 5 cm both
+        assert "n_bar    = 20" in text and "bar_size = 0.05" in text, name
     with pytest.raises(brem_run.common.ToolchainError, match="off-axis"):
-        brem_run._generator_face(load_preset("flame").detector)
+        _patched_brem_script(load_preset("flame"), tmp_path / "flame")
     with pytest.raises(brem_run.common.ToolchainError, match="square"):
-        brem_run._generator_face(replace(face, bar_rows=10))
+        _patched_brem_script(replace(dq, detector=replace(dq.detector, bar_rows=10)),
+                             tmp_path / "oblong")
 
 
 def test_meson_backend_dispatch():

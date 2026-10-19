@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from mcpsim.model import _load_acceptance_on_grid, compute_production
+from mcpsim.model import compute_production
 
 
 def test_all_channels_assemble(mini_config):
@@ -69,11 +69,12 @@ def test_supplied_acceptance_file_is_used_as_it_is(mini_repo, tmp_path, stub_rec
     np.testing.assert_allclose(yields[0.4]["eta"], yields[0.2]["eta"], rtol=1e-12)
 
 
-def test_short_single_column_acceptance_raises(tmp_path):
-    f = tmp_path / "one_col.txt"
-    np.savetxt(f, np.array([1e-3, 2e-3, 3e-3]))   # 3 rows, 1 col; grid has 5
+def test_short_single_column_acceptance_raises(mini_config, tmp_path):
+    acc = tmp_path / "one_col.txt"
+    np.savetxt(acc, np.array([1e-3, 2e-3, 3e-3]))   # 3 rows, 1 col; the grid has 5
+    data = replace(mini_config.data, acceptance={**mini_config.data.acceptance, "pi0": str(acc)})
     with pytest.raises(ValueError, match="single-column acceptance"):
-        _load_acceptance_on_grid(f, np.linspace(0.01, 0.1, 5))
+        compute_production(replace(mini_config, channels=["meson_decay"], data=data))
 
 
 def test_config_notes_reach_warnings(mini_config):

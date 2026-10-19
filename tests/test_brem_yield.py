@@ -126,12 +126,12 @@ def test_face_max_theta():
 
 def _brem_warnings(cfg, grids):
     from dataclasses import replace
-    from mcpsim import model
-    cfg = replace(cfg, data=replace(cfg.data, brem_dir=str(grids)))
-    grid = np.array([0.01, 0.1])
-    res = model.ProductionResult(config=cfg, masses=grid)
-    model._add_brem(cfg, grid, res)
-    return [w for w in res.warnings if "not accurate above" in w]
+    from mcpsim.model import compute_production
+    masses = grids.parent / "masses.txt"
+    np.savetxt(masses, [0.01, 0.1])
+    cfg = replace(cfg, channels=["brem"],
+                  data=replace(cfg.data, brem_dir=str(grids), mass_grid=str(masses)))
+    return [w for w in compute_production(cfg).warnings if "not accurate above" in w]
 
 
 def test_brem_validity_angle_warning(iron_brem_dir):
