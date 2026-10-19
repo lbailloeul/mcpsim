@@ -53,6 +53,22 @@ def test_overridden_geometry_without_samples_warns(mini_config):
     assert "pi0" in result.meson_channels
 
 
+def test_supplied_acceptance_file_is_used_as_it_is(mini_repo, tmp_path, stub_recompute,
+                                                   flat_acceptance):
+    import yaml
+    from mcpsim.config import load_config
+    # darkquest models the 1 x 1 m face, which its archived files are not for
+    yields = {}
+    for value in (0.4, 0.2):
+        path = tmp_path / f"own_{value}.yaml"
+        path.write_text(yaml.safe_dump({"preset": "darkquest", "channels": ["mesons"], "data": {
+            "acceptance": {"pi0": str(flat_acceptance(f"pi0_{value}.txt", value))}}}))
+        yields[value] = compute_production(load_config(path)).meson_channels
+    assert np.any(yields[0.4]["pi0"] > 0)
+    np.testing.assert_allclose(yields[0.4]["pi0"], 2 * yields[0.2]["pi0"], rtol=1e-12)
+    np.testing.assert_allclose(yields[0.4]["eta"], yields[0.2]["eta"], rtol=1e-12)
+
+
 def test_short_single_column_acceptance_raises(tmp_path):
     f = tmp_path / "one_col.txt"
     np.savetxt(f, np.array([1e-3, 2e-3, 3e-3]))   # 3 rows, 1 col; grid has 5
@@ -99,7 +115,7 @@ def test_drell_yan_normalisation_follows_target(mini_config):
     user_scan = replace(mini_config, dy_cross_is_preset=False)
     legacy = compute_production(replace(user_scan, engine=replace(user_scan.engine, fidelity="legacy")))
     for name in ("iron", "molybdenum"):
-        t = TargetConfig.from_dict({"name": name})
+        t = TargetConfig().overlay({"name": name})
         cfg = replace(user_scan, target=t, data=replace(user_scan.data, dy_material="iron"))
         res = compute_production(cfg)
         ratio = SIGMA_PN_INELASTIC_MB / sigma_inel_per_nucleon_mb(t.density_g_cm3, t.interaction_length_cm)
@@ -119,7 +135,7 @@ def test_drell_yan_uses_the_target_material_table(mini_config, mini_repo, name):
     from mcpsim.config import TargetConfig
     from mcpsim.physics import drellyan
     from mcpsim.physics.constants import MB_TO_PB
-    t = TargetConfig.from_dict({"name": name})
+    t = TargetConfig().overlay({"name": name})
     res = compute_production(replace(mini_config, target=t))
     table = drellyan.load_table(drellyan.find_table(paths.DY_TABLES_DIR, 120.0, name))
     assert table.header["material"] == name and table.header["beam_energy_gev"] == "120"
@@ -137,7 +153,7 @@ def test_drell_yan_tables_differ_by_material(mini_config):
     # undo the per-POT normalisation: what is left is the material's table
     per_nucleon = {}
     for name in ("carbon", "iron", "molybdenum", "tungsten"):
-        t = TargetConfig.from_dict({"name": name})
+        t = TargetConfig().overlay({"name": name})
         dy = compute_production(replace(mini_config, target=t)).drell_yan
         per_nucleon[name] = dy[-1] * sigma_inel_per_nucleon_mb(t.density_g_cm3, t.interaction_length_cm)
     values = sorted(per_nucleon.values())
@@ -155,7 +171,7 @@ def test_drell_yan_legacy_keeps_the_paper_scan(mini_config):
     np.testing.assert_allclose(res.drell_yan, expected, rtol=1e-12)   # dy_cross.txt: 2 pb
     assert not any("Drell-Yan" in w for w in res.warnings)
     # SHiP's published setup: the iron scan and 13 mb on molybdenum, said as such
-    res = compute_production(replace(legacy, target=TargetConfig.from_dict({"name": "molybdenum"})))
+    res = compute_production(replace(legacy, target=TargetConfig().overlay({"name": "molybdenum"})))
     np.testing.assert_allclose(res.drell_yan, expected, rtol=1e-12)
     assert any("fidelity legacy, as published" in w for w in res.warnings)
 

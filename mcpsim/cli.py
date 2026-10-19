@@ -18,8 +18,8 @@ from typing import List, Optional, Sequence
 import click
 
 from . import paths
-from .config import (Config, TargetConfig, list_presets, load_config, load_preset, run_config,
-                     normalize_channels, normalize_target)
+from .config import (Config, list_presets, load_config, load_preset, normalize_channels,
+                     normalize_target, pin_supplied_acceptance, run_config)
 
 
 def _resolve(preset: Optional[str], config: Optional[str]) -> Config:
@@ -119,7 +119,7 @@ def _apply_engine(cfg: Config, engine, fidelity, seed, quick, ngamma=None,
             # Own name -> own output directory (darkquest_molybdenum/), so a
             # material swap never overwrites the preset's run.
             cfg = replace(cfg, name=f"{cfg.name} {name}",
-                          target=TargetConfig.from_dict({"name": name}))
+                          target=cfg.target.overlay({"name": name}))
     eng = cfg.engine
     if engine is not None:
         eng = replace(eng, decay=engine)
@@ -144,10 +144,12 @@ def _with_offaxis(cfg: Config, angle_mrad: float) -> Config:
     """Config displaced to one explicit off-axis angle.
 
     Always renames (so scan outputs land in per-angle directories, even for
-    the angle matching the config default) and always recomputes acceptance —
-    an explicit --offaxis request opts into the off-axis machinery."""
+    the angle matching the config default) and recomputes acceptance — an
+    explicit --offaxis request opts into the off-axis machinery. Files the
+    config names are pinned to the detector before the move, so a moved
+    detector recomputes them too, and says so."""
     return replace(
-        cfg,
+        pin_supplied_acceptance(cfg),
         name=f"{cfg.name} {angle_mrad:g}mrad",
         detector=replace(cfg.detector, offaxis_mrad=angle_mrad),
         geometry_is_preset=False,
@@ -475,11 +477,15 @@ def compare_cmd(presets, configs, out, channels, engine, fidelity, seed, quick,
 @_options(*_common, *_engine_opts)
 @click.option("--mass-subset", type=int, default=None, help="Use only N masses.")
 @click.option("--trials", type=int, default=None, help="Meson-generation trials.")
-@click.option("--n-proc", type=int, default=4,
-              help="Cores: MPI ranks for brem; per job under --condor (dy: MadGraph cores).")
-@click.option("--brem-grid-size", type=int, default=100, help="VEGAS (theta,p) grid size.")
-@click.option("--brem-neval", type=int, default=4000, help="VEGAS evaluations per iteration.")
-@click.option("--brem-nitn", type=int, default=10, help="VEGAS iterations.")
+@click.option("--n-proc", type=int, default=None,
+              help="Cores: MPI ranks for brem; per job under --condor (dy: MadGraph cores) "
+                   "[default: the backend's own].")
+@click.option("--brem-grid-size", type=int, default=None,
+              help="VEGAS (theta,p) grid size [default: the backend's own].")
+@click.option("--brem-neval", type=int, default=None,
+              help="VEGAS evaluations per iteration [default: the backend's own].")
+@click.option("--brem-nitn", type=int, default=None,
+              help="VEGAS iterations [default: the backend's own].")
 @click.option("--dy-nevents", type=int, default=None,
               help="MadGraph events per mass for dy (default 10000).")
 @click.option("--condor", is_flag=True,

@@ -43,6 +43,28 @@ def mini_repo(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def stub_recompute(monkeypatch):
+    """The Python decay engine's recompute, stubbed to a flat acceptance, so a
+    recomputed channel is told apart from a file's. Returns that acceptance."""
+    from mcpsim.generation import pydecay, samples
+    value = 0.1
+    monkeypatch.setattr(samples, "have_samples", lambda *a, **k: True)
+    monkeypatch.setattr(pydecay, "cached_acceptance",
+                        lambda cfg, name, grid, *a, **k: np.full(grid.size, value))
+    return value
+
+
+@pytest.fixture
+def flat_acceptance(tmp_path):
+    """Writes a (mass, acceptance) file flat at `value` on the mini mass grid."""
+    def write(name, value):
+        path = tmp_path / name
+        np.savetxt(path, np.column_stack([MASSES, np.full(MASSES.size, value)]))
+        return path
+    return write
+
+
+@pytest.fixture
 def mini_config(mini_repo):
     """A Config wired to the mini repo (120 GeV, all channels)."""
     from mcpsim.config import Config, DataConfig

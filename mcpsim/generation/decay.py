@@ -75,8 +75,7 @@ def check_supported(cfg: Config, meson: str) -> None:
 
 
 def run_decay_scan(cfg: Config, meson: str, source: Path, mass_grid: np.ndarray,
-                   work_dir: Path, *, seed: int = 12345,
-                   sampler: str = "dalitz") -> Path:
+                   work_dir: Path, *, sampler: str = "dalitz") -> Path:
     """Scan the mass grid with the legacy C++ binaries and write an
     accumulated (mass, acceptance) file. Dispatches per channel:
     Dalitz -> lanl_decayPion_12bar.cc, 2-body -> patched decayVectorMeson.cc.
@@ -84,14 +83,13 @@ def run_decay_scan(cfg: Config, meson: str, source: Path, mass_grid: np.ndarray,
     check_supported(cfg, meson)
     if MESONS[meson].channel == "two_body":
         return _run_vector_meson_scan(cfg, meson, source, mass_grid, work_dir)
-    return _run_dalitz_scan(cfg, meson, source, mass_grid, work_dir,
-                            seed=seed, sampler=sampler)
+    return _run_dalitz_scan(cfg, meson, source, mass_grid, work_dir, sampler=sampler)
 
 
 def _run_dalitz_scan(cfg: Config, meson: str, source: Path, mass_grid: np.ndarray,
-                     work_dir: Path, *, seed: int = 12345,
-                     sampler: str = "dalitz") -> Path:
-    """Dalitz acceptance scan via lanl_decayPion_12bar.cc (text source)."""
+                     work_dir: Path, *, sampler: str = "dalitz") -> Path:
+    """Dalitz acceptance scan via lanl_decayPion_12bar.cc (text source),
+    seeded with cfg.engine.seed."""
     work_dir.mkdir(parents=True, exist_ok=True)
     source = _as_text_source(Path(source), work_dir, meson)
 
@@ -120,7 +118,7 @@ def _run_dalitz_scan(cfg: Config, meson: str, source: Path, mass_grid: np.ndarra
         common.run([
             binary, str(root_out), str(mchi), str(tmp_eff), str(source),
             str(det.distance_m), str(det.bar_columns), str(det.bar_rows),
-            str(mother), str(seed), sampler, "0",
+            str(mother), str(cfg.engine.seed), sampler, "0",
             str(det.bar_layers), det.face_mode,
         ])
         eff = np.loadtxt(tmp_eff)

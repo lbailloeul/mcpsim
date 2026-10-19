@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from . import geometry, paths
-from .config import Config, run_config
+from .config import SUPPLIED_BY_CONFIG, Config, run_config
 from .physics import brem as brem_mod
 from .physics import constants as C
 from .physics import drellyan, meson_decay
@@ -206,28 +206,50 @@ def _upsilon_ageo(cfg: Config, jpsi_ageo, result: ProductionResult):
     return None
 
 
-def acceptance_files_valid(cfg: Config) -> bool:
-    """True when the archived acceptance files (data.acceptance, data.dy_ageo)
-    were made for the detector this run models: the preset's own detector, or
-    the published one (legacy_detector) when the preset records it."""
+def acceptance_file_valid(cfg: Config, path: str) -> bool:
+    """True when the acceptance file `path` (a data.acceptance value or
+    data.dy_ageo) describes the detector this run models (cfg after
+    run_config). A file the user config names is used as it is, one
+    regenerated for a detector while that detector is modelled, and the base
+    preset's files follow _preset_files_valid."""
+    made_for = cfg.acceptance_made_for.get(path)
+    if made_for is None:
+        return _preset_files_valid(cfg)
+    return made_for in (SUPPLIED_BY_CONFIG, geometry.face_signature(cfg.detector))
+
+
+def _preset_files_valid(cfg: Config) -> bool:
+    """True when the base preset's archived acceptance files were made for the
+    detector this run models: the preset's own detector, or the published one
+    (legacy_detector) when the preset records it."""
     if not cfg.geometry_is_preset:
         return False
     return (cfg.legacy_detector is None
             or geometry.face_signature(cfg.detector) == geometry.face_signature(cfg.legacy_detector))
 
 
+def _not_this_detector(cfg: Config, path: str) -> str:
+    """How a warning names an acceptance file made for another detector."""
+    made_for = cfg.acceptance_made_for.get(path)
+    if made_for is None:
+        return f"the PRESET-geometry file ({path}), not your detector geometry"
+    return (f"the file {path}, made for the {made_for}, not this run's "
+            f"{geometry.face_signature(cfg.detector)}")
+
+
 def _meson_ageo(cfg: Config, name: str, grid: np.ndarray,
                 result: ProductionResult):
     """Geometric acceptance for one meson, honest about geometry.
 
-    1. The file was made for this detector (acceptance_files_valid) -> load
+    1. The file was made for this detector (acceptance_file_valid) -> load
        it verbatim (bit-for-bit parity with the published pipeline).
-    2. Overridden geometry + the Python engine + archived PYTHIA samples ->
-       recompute for the ACTUAL geometry (cached under mcpsim-output/cache).
-    3. Otherwise fall back to the preset file WITH A LOUD WARNING — the file
-       was computed for the preset's detector, not this one. (Previously this
-       fallback happened silently, so e.g. a 60 m custom detector reused the
-       40 m DarkQuest acceptance with no indication.)
+    2. Otherwise the Python engine + archived PYTHIA samples -> recompute for
+       the ACTUAL geometry (cached under mcpsim-output/cache), with a warning
+       when the file was the config's own.
+    3. Otherwise fall back to the file WITH A LOUD WARNING — it was made for
+       another detector. (Previously this fallback happened silently, so e.g.
+       a 60 m custom detector reused the 40 m DarkQuest acceptance with no
+       indication.)
     """
     acc_file = cfg.data.acceptance.get(name)
 
@@ -239,12 +261,16 @@ def _meson_ageo(cfg: Config, name: str, grid: np.ndarray,
                 f"acceptance file missing for '{name}' ({acc_file}); skipping.")
             return None
 
-    if acceptance_files_valid(cfg) and acc_file:
+    if acc_file and acceptance_file_valid(cfg, acc_file):
         return _load_file()
 
     if cfg.engine.decay == "python":
         from .generation import pydecay, samples
         if samples.have_samples(cfg, name):
+            if acc_file in cfg.acceptance_made_for:
+                result.warnings.append(
+                    f"'{name}' acceptance: {_not_this_detector(cfg, acc_file)}; "
+                    f"recomputed for this detector.")
             return pydecay.cached_acceptance(cfg, name, grid,
                                              paths.CACHE_DIR / "acceptance")
         reason = (f"archived PYTHIA sample for '{name}' not found under "
@@ -255,9 +281,8 @@ def _meson_ageo(cfg: Config, name: str, grid: np.ndarray,
 
     if acc_file:
         result.warnings.append(
-            f"'{name}' acceptance uses the PRESET-geometry file ({acc_file}), "
-            f"not your detector geometry — {reason}. Treat this channel as "
-            f"approximate."
+            f"'{name}' acceptance uses {_not_this_detector(cfg, acc_file)} — "
+            f"{reason}. Treat this channel as approximate."
         )
         return _load_file()
     result.warnings.append(f"no acceptance available for '{name}' ({reason}); skipping.")
@@ -329,10 +354,17 @@ def _add_brem(cfg: Config, grid: np.ndarray, result: ProductionResult) -> None:
                 f"brem grids were generated for A={A_grid:g}; rescaled their "
                 f"sigma_pA to target '{t.name}' (A={t.A:g}): x{scale:.3f}.")
 
-    if bands[1].sum() == 0:
+    if not files:
         result.warnings.append(
             f"no brem files matched {cfg.data.brem_pattern} in {brem_dir}; "
             f"a new beam energy needs --regenerate."
+        )
+    elif bands[1].sum() == 0:
+        result.warnings.append(
+            f"{len(files)} brem grid file(s) matched {cfg.data.brem_pattern} in "
+            f"{brem_dir}, but they give zero yield for this detector on this mass "
+            f"grid (no cross section inside its acceptance, or none at these "
+            f"masses); brem contributes nothing."
         )
     result.brem_low, result.brem_central, result.brem_high = bands[0], bands[1], bands[2]
 
@@ -382,12 +414,11 @@ def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> N
             result.warnings.append("Drell-Yan input files missing; skipping.")
             return
         _check_dy_scan(cfg, cross, ageo, result)
-        if not acceptance_files_valid(cfg):
+        if not acceptance_file_valid(cfg, cfg.data.dy_ageo):
             result.warnings.append(
-                f"Drell-Yan acceptance is the PRESET-geometry file "
-                f"({cfg.data.dy_ageo}), not your detector geometry — it is not "
-                f"recomputed for custom or off-axis detectors. Treat this channel "
-                f"as approximate.")
+                f"Drell-Yan acceptance is {_not_this_detector(cfg, cfg.data.dy_ageo)} "
+                f"— it is not recomputed for custom or off-axis detectors. Treat "
+                f"this channel as approximate.")
     order = np.argsort(m)
     result.drell_yan = np.interp(grid, m[order], y[order], left=0.0, right=0.0)
 

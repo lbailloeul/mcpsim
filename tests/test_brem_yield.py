@@ -151,3 +151,25 @@ def test_brem_validity_angle_warning(iron_brem_dir):
         w = _brem_warnings(cfg, iron_brem_dir)                  # the face's corners
         assert len(w) == 1 and "face beyond that angle is missing" in w[0]
         assert _brem_warnings(replace(cfg, detector=cfg.legacy_detector), iron_brem_dir) == []
+
+
+def test_zero_brem_warning_tells_no_grid_from_zero_yield(mini_repo, mini_config):
+    from dataclasses import replace
+    from mcpsim.model import compute_production
+    (mini_repo / "empty-brem").mkdir()
+    zero = mini_repo / "zero-brem"
+    zero.mkdir()
+    np.savetxt(zero / "Brem_120GeV_0.02.txt",
+               np.column_stack([[-4.0, -3.0], [0.0, 1.0], np.zeros((2, 3))]))
+
+    def zero_brem_warnings(brem_dir):
+        cfg = replace(mini_config, channels=["brem"],
+                      data=replace(mini_config.data, brem_dir=brem_dir))
+        result = compute_production(cfg)
+        assert not result.brem_central.any()
+        return [w for w in result.warnings if cfg.data.brem_pattern in w]
+
+    [no_grid] = zero_brem_warnings("empty-brem")
+    [zero_yield] = zero_brem_warnings("zero-brem")
+    assert "no brem files matched" in no_grid
+    assert "no brem files matched" not in zero_yield

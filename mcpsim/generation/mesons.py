@@ -39,13 +39,14 @@ def choose_backend(cfg: Config) -> str:
 
 
 def generate(cfg: Config, meson: str, work_dir: Path, *, trials: int = 10_000_000,
-             seed: int = 12345, n_cores: int = 1) -> Path:
-    """Generate a meson source sample; returns the produced file path."""
+             n_cores: int = 1) -> Path:
+    """Generate a meson source sample, seeded with cfg.engine.seed; returns
+    the produced file path."""
     backend = choose_backend(cfg)
     work_dir.mkdir(parents=True, exist_ok=True)
     if backend == "burman_smith":
-        return _generate_burman_smith(meson, work_dir, trials, seed)
-    return _generate_pythia(cfg, meson, work_dir, trials, seed, n_cores)
+        return _generate_burman_smith(meson, work_dir, trials, cfg.engine.seed)
+    return _generate_pythia(cfg, meson, work_dir, trials, cfg.engine.seed, n_cores)
 
 
 def _generate_burman_smith(meson: str, work_dir: Path, trials: int, seed: int) -> Path:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import difflib
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -26,24 +26,45 @@ CHANNEL_ALIASES = {"mesons": "meson_decay", "meson": "meson_decay",
 TOP_LEVEL_KEYS = ("preset", "name", "family", "source_repo", "channels", "beam",
                   "target", "detector", "legacy_detector", "sensitivity", "data",
                   "engine")
+# A run record's keys, in write order; "config" holds asdict(cfg) (run_record).
+RUN_RECORD_KEYS = ("mcpsim_version", "data_source", "config", "drell_yan_cross_sections")
 # Short names for the tabulated target materials (iron = the DarkQuest dump,
 # molybdenum = the SHiP TZM target, carbon = NuMI/LBNF graphite).
 TARGET_ALIASES = {"fe": "iron", "mo": "molybdenum", "moly": "molybdenum",
                   "tzm": "molybdenum", "w": "tungsten", "c": "carbon",
                   "graphite": "carbon"}
+# Config.acceptance_made_for value of a file the user config names: it is used
+# as it is, whatever detector the run models.
+SUPPLIED_BY_CONFIG = "named by the config"
+
+
+_TARGET_NUMBERS = ("Z", "A", "density_g_cm3", "interaction_length_cm")
+
+
+def _tabulated_name(name: object) -> Optional[str]:
+    """The TARGET_MATERIALS key a material name or alias means, in any case
+    and with surrounding space, or None. The one name rule behind a YAML
+    `target.name` and the --target flag."""
+    key = str(name).strip().lower()
+    canon = TARGET_ALIASES.get(key, key)
+    return canon if canon in C.TARGET_MATERIALS else None
+
+
+def _unknown_target_message(name: object) -> str:
+    key = str(name).strip().lower()
+    return (f"unknown target material '{name}'"
+            f"{_did_you_mean(key, list(C.TARGET_MATERIALS) + list(TARGET_ALIASES))} "
+            f"(known: {', '.join(sorted(C.TARGET_MATERIALS))}; aliases: "
+            f"{', '.join(TARGET_ALIASES)}). Either use a known name or give a "
+            f"config's target section all of {', '.join(_TARGET_NUMBERS)} for a "
+            f"custom material.")
 
 
 def normalize_target(name: str) -> str:
-    """Canonical tabulated material for a name or alias; unknown names raise
-    (custom materials need the full Z/A/density/lambda set in a YAML config)."""
-    key = str(name).strip().lower()
-    canon = TARGET_ALIASES.get(key, key)
-    if canon not in C.TARGET_MATERIALS:
-        raise ValueError(
-            f"unknown target '{name}'"
-            f"{_did_you_mean(key, list(C.TARGET_MATERIALS) + list(TARGET_ALIASES))}; "
-            f"known: iron (DarkQuest), molybdenum (SHiP), tungsten, carbon "
-            f"(graphite); aliases: {', '.join(TARGET_ALIASES)}")
+    """Canonical tabulated material for a name or alias; unknown names raise."""
+    canon = _tabulated_name(name)
+    if canon is None:
+        raise ValueError(_unknown_target_message(name))
     return canon
 
 
@@ -117,44 +138,34 @@ class TargetConfig:
     density_g_cm3: float = 7.87
     interaction_length_cm: float = 16.8
 
-    @classmethod
-    def from_dict(cls, d: dict) -> "TargetConfig":
-        """Resolve a target spec; a bare {name: ...} is filled from the table.
+    def overlay(self, spec: dict) -> "TargetConfig":
+        """This target with a `target:` spec applied; a YAML section and the
+        --target flag both come through here.
 
-        An unrecognised material name must come with the full {Z, A,
-        density_g_cm3, interaction_length_cm} set — previously it silently
-        inherited iron's numbers, which is wrong physics with no warning.
+        A spec without a name keeps this material, so `preset: ship` with
+        `target: {density_g_cm3: 8.0}` stays molybdenum. A tabulated name or
+        alias starts from its table entry, and any other name is a custom
+        material that must give all four numbers. The given numbers apply last.
         """
-        allowed = {"name", "Z", "A", "density_g_cm3", "interaction_length_cm"}
-        unknown = set(d) - allowed
+        allowed = {"name", *_TARGET_NUMBERS}
+        unknown = set(spec) - allowed
         if unknown:
             raise ValueError(
                 f"unknown key(s) {sorted(unknown)} in the 'target' section; "
                 f"valid keys: {sorted(allowed)}"
             )
-        name = d.get("name", "iron")
-        name = TARGET_ALIASES.get(str(name).strip().lower(), name)
-        mat = C.TARGET_MATERIALS.get(name)
-        overrides = {k: d[k] for k in ("Z", "A", "density_g_cm3", "interaction_length_cm")
-                     if d.get(k) is not None}
-        if mat is None and len(overrides) < 4:
-            raise ValueError(
-                f"unknown target material '{name}'"
-                f"{_did_you_mean(str(name).lower(), list(C.TARGET_MATERIALS) + list(TARGET_ALIASES))} "
-                f"(known: {', '.join(sorted(C.TARGET_MATERIALS))}; aliases: "
-                f"{', '.join(TARGET_ALIASES)}). Either use a known name or "
-                f"supply all of Z, A, density_g_cm3, interaction_length_cm for a "
-                f"custom material."
-            )
-        base = dict(
-            name=name,
-            Z=mat.Z if mat else 26,
-            A=mat.A if mat else 55.845,
-            density_g_cm3=mat.density_g_cm3 if mat else 7.87,
-            interaction_length_cm=mat.interaction_length_cm if mat else 16.8,
-        )
-        base.update(overrides)
-        return cls(**base)
+        given = {k: spec[k] for k in _TARGET_NUMBERS if spec.get(k) is not None}
+        name = spec.get("name")
+        if name is None:
+            return replace(self, **given)
+        canon = _tabulated_name(name)
+        if canon is not None:
+            m = C.TARGET_MATERIALS[canon]
+            return replace(TargetConfig(canon, m.Z, m.A, m.density_g_cm3,
+                                        m.interaction_length_cm), **given)
+        if len(given) < len(_TARGET_NUMBERS):
+            raise ValueError(_unknown_target_message(name))
+        return TargetConfig(name=name, **given)
 
 
 @dataclass
@@ -282,6 +293,12 @@ class Config:
     # per-material Drell-Yan table replaces by default. A user config that
     # sets data.dy_cross flips this and its own scan is used.
     dy_cross_is_preset: bool = True
+    # What each acceptance file the config supplied (a data.acceptance value
+    # or data.dy_ageo, keyed by the path as data holds it) was made for: the
+    # geometry.face_signature of the detector regeneration wrote it for, or
+    # SUPPLIED_BY_CONFIG. A file not listed is the base preset's
+    # (model.acceptance_file_valid). Written by mark_acceptance_supplied.
+    acceptance_made_for: Dict[str, str] = field(default_factory=dict)
 
     # -- derived helpers ----------------------------------------------------
     @property
@@ -339,6 +356,40 @@ def _beam_key(energy_gev: float) -> Optional[str]:
     return None
 
 
+def run_record(cfg: Config, *, data_source: str,
+               drell_yan_cross_sections: Optional[str] = None) -> dict:
+    """The run_<tag>.yaml payload, keys in RUN_RECORD_KEYS order: provenance
+    plus the resolved configuration as asdict(cfg). load_config reads it back
+    (_config_from_run_record)."""
+    from . import __version__
+    record = {"mcpsim_version": __version__, "data_source": data_source,
+              "config": asdict(cfg)}
+    if "drell_yan" in cfg.channels:
+        record["drell_yan_cross_sections"] = drell_yan_cross_sections
+    return record
+
+
+def _config_from_run_record(raw: dict) -> Config:
+    """The Config a run record holds, exactly: no base preset, no overlay and
+    no provenance re-derived (a record's detector: and data: would otherwise
+    clear geometry_is_preset and mark every file as the config's own)."""
+    unknown = set(raw) - set(RUN_RECORD_KEYS)
+    if unknown:
+        raise ValueError(
+            f"unknown key(s) {sorted(unknown)} beside the 'config:' block of a run "
+            f"record; valid keys: {', '.join(RUN_RECORD_KEYS)}. Change the run "
+            f"under 'config:' instead.")
+    try:
+        cfg = config_from_record(raw["config"])
+    except TypeError as exc:
+        raise ValueError(
+            f"this run record, written by mcpsim {raw.get('mcpsim_version', '?')}, "
+            f"does not match this version's configuration: {exc}") from exc
+    if cfg.source_repo:
+        paths.set_source_repo(cfg.source_repo)
+    return cfg
+
+
 def config_from_record(record: dict) -> Config:
     """Rebuild a Config from dataclasses.asdict(cfg), as stored in run records
     and batch bundles (config.json): the inverse of asdict, with no preset
@@ -352,6 +403,25 @@ def config_from_record(record: dict) -> Config:
     if kw.get("legacy_detector") is not None:
         kw["legacy_detector"] = DetectorConfig(**kw["legacy_detector"])
     return Config(**kw)
+
+
+def mark_acceptance_supplied(cfg: Config, files: Iterable[str], made_for: str) -> Config:
+    """cfg with `files` recorded as made for `made_for`: a detector's
+    geometry.face_signature, or SUPPLIED_BY_CONFIG. Only files cfg.data uses
+    are recorded, and records of files it no longer uses are dropped."""
+    used = {*cfg.data.acceptance.values(), cfg.data.dy_ageo} - {None}
+    stamps = {p: s for p, s in cfg.acceptance_made_for.items() if p in used}
+    stamps.update({p: made_for for p in files if p in used})
+    return replace(cfg, acceptance_made_for=stamps)
+
+
+def pin_supplied_acceptance(cfg: Config) -> Config:
+    """cfg with the files the user config names recorded as made for the
+    detector cfg models now, so moving that detector (--offaxis) recomputes
+    their acceptance instead of reusing them."""
+    from . import geometry    # geometry imports this module
+    named = [p for p, s in cfg.acceptance_made_for.items() if s == SUPPLIED_BY_CONFIG]
+    return mark_acceptance_supplied(cfg, named, geometry.face_signature(cfg.detector))
 
 
 def run_config(cfg: Config) -> Config:
@@ -383,8 +453,12 @@ def load_preset(name: str) -> Config:
 
 
 def load_config(path: str | Path) -> Config:
-    """Load a user YAML config, inheriting a base preset where appropriate."""
+    """Load a user YAML config, inheriting a base preset where appropriate, or
+    a run record (run_<tag>.yaml, a top-level `config:` mapping), which reruns
+    the recorded configuration exactly."""
     raw = _read_yaml(Path(path))
+    if isinstance(raw.get("config"), dict):
+        return _config_from_run_record(raw)
     base_name = raw.get("preset")
     inferred = base_name is None
     if inferred:
@@ -396,14 +470,7 @@ def load_config(path: str | Path) -> Config:
             f"available: {', '.join(list_presets()) or '(none)'}"
         )
     base = load_preset(base_name) if base_name and base_name in list_presets() else Config()
-    cfg = _config_from_dict(raw, base=base)
-
-    # A user config that overrides the detector invalidates the base preset's
-    # precomputed acceptance files; model._meson_ageo recomputes in that case.
-    if "detector" in raw:
-        cfg = replace(cfg, geometry_is_preset=False)
-    if "dy_cross" in (raw.get("data") or {}):
-        cfg = replace(cfg, dy_cross_is_preset=False)
+    cfg = _provenance(_config_from_dict(raw, base=base), raw)
 
     # An inferred base preset drags its precomputed brem/DY/acceptance inputs
     # along; if the beam energy differs from the preset's, those inputs were
@@ -419,6 +486,24 @@ def load_config(path: str | Path) -> Config:
                 f"'preset:' explicitly) for correct inputs at this energy."
             ])
     return cfg
+
+
+def _provenance(cfg: Config, raw: dict) -> Config:
+    """cfg with the provenance a user config earns by what it sets (a preset
+    earns none: its inputs are its own).
+
+        detector:                    geometry_is_preset = False, so the base
+                                     preset's acceptance files are recomputed
+        data.dy_cross:               dy_cross_is_preset = False
+        data.acceptance, dy_ageo:    the files named are SUPPLIED_BY_CONFIG
+    """
+    data = raw.get("data") or {}
+    if "detector" in raw:
+        cfg = replace(cfg, geometry_is_preset=False)
+    if "dy_cross" in data:
+        cfg = replace(cfg, dy_cross_is_preset=False)
+    named = [*(data.get("acceptance") or {}).values(), data.get("dy_ageo")]
+    return mark_acceptance_supplied(cfg, named, SUPPLIED_BY_CONFIG)
 
 
 def _infer_base_preset(raw: dict) -> Optional[str]:
@@ -462,7 +547,7 @@ def _config_from_dict(raw: dict, base: Optional[Config] = None) -> Config:
     if "beam" in raw:
         cfg = replace(cfg, beam=replace(cfg.beam, **_clean(raw["beam"], BeamConfig, "beam")))
     if "target" in raw:
-        cfg = replace(cfg, target=TargetConfig.from_dict(raw["target"]))
+        cfg = replace(cfg, target=cfg.target.overlay(raw["target"] or {}))
     if "detector" in raw:
         cfg = replace(cfg, detector=replace(cfg.detector, **_clean(raw["detector"], DetectorConfig, "detector")))
     if "legacy_detector" in raw:
@@ -483,7 +568,10 @@ def _config_from_dict(raw: dict, base: Optional[Config] = None) -> Config:
                 n_gamma=_scintillator_n_gamma(cfg.sensitivity.scintillator,
                                               cfg.detector.bar_length_m)))
     if "data" in raw:
-        cfg = replace(cfg, data=replace(cfg.data, **_clean(raw["data"], DataConfig, "data")))
+        data = _clean(raw["data"], DataConfig, "data")
+        if "acceptance" in data:
+            data["acceptance"] = _overlay_acceptance(cfg.data.acceptance, data["acceptance"])
+        cfg = replace(cfg, data=replace(cfg.data, **data))
     if "engine" in raw:
         cfg = replace(cfg, engine=replace(cfg.engine, **_clean(raw["engine"], EngineConfig, "engine")))
 
@@ -498,6 +586,19 @@ def _config_from_dict(raw: dict, base: Optional[Config] = None) -> Config:
                                           cfg.detector.bar_length_m)))
 
     return cfg
+
+
+def _overlay_acceptance(base: Dict[str, str], given: Optional[dict]) -> Dict[str, str]:
+    """data.acceptance applied per meson: a listed meson replaces the base
+    preset's file, a null drops it, and the other mesons keep the base's."""
+    given = given or {}
+    unknown = sorted(set(given) - set(C.MESONS), key=str)
+    if unknown:
+        hint = "".join(_did_you_mean(str(m), C.MESONS) for m in unknown)
+        raise ValueError(f"unknown meson(s) {unknown} in data.acceptance{hint}; "
+                         f"valid: {', '.join(C.MESONS)}")
+    merged = {**base, **given}
+    return {m: f for m, f in merged.items() if f is not None}
 
 
 def _scintillator_n_gamma(name: Optional[str], bar_length_m: Optional[float]) -> float:

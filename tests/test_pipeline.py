@@ -1,12 +1,93 @@
 """regenerate_inputs: warning propagation, guard ordering, early skips."""
 
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
 
+from mcpsim import load_preset
 from mcpsim.generation.common import ToolchainError
 from mcpsim.pipeline import regenerate_inputs
+
+
+def test_the_engine_seed_reaches_the_cpp_binaries(mini_repo, tmp_path, monkeypatch):
+    from mcpsim.generation import common
+    seeds = {}
+
+    def fake_run(cmd, cwd=None, env=None):
+        cmd = [str(c) for c in cmd]
+        tool = Path(cmd[0]).name
+        if tool == "generatePion_12bar":       # out trials seed mother_MeV
+            seeds.setdefault(tool, set()).add(cmd[3])
+            Path(cmd[1]).write_text("1000.0 0.999 0.0\n")
+        elif tool == "lanl_decayPion_12bar":   # root mchi eff source distance cols rows mother seed ...
+            seeds.setdefault(tool, set()).add(cmd[9])
+            Path(cmd[3]).write_text(f"{cmd[2]} 0.25\n")
+
+    monkeypatch.setattr(common, "compile_cpp", lambda src, out, *a, **k: out)
+    monkeypatch.setattr(common, "run", fake_run)
+    lanl = load_preset("lanl_12bar")
+    cfg = replace(lanl, engine=replace(lanl.engine, decay="cpp", seed=777))
+    regenerate_inputs(cfg, tmp_path / "gen", mass_subset=2)
+    assert seeds == {"generatePion_12bar": {"777"}, "lanl_decayPion_12bar": {"777"}}
+
+
+def test_local_drell_yan_runs_madgraph_on_the_cores_asked_for(mini_config, tmp_path, monkeypatch):
+    from mcpsim.generation import common, madgraph
+    asked = []
+
+    def fake_madgraph(cfg, model, mchi, proc_dir, *, nevents, cores=None):
+        asked.append(cores)
+        lhe = proc_dir / "unweighted_events.lhe"
+        lhe.parent.mkdir(parents=True, exist_ok=True)
+        pdg = madgraph.MCP_PDG_DEFAULT
+        lhe.write_text(f"""<event>
+ 4 1 +1.0e-03 1.0e02 7.5e-03 1.2e-01
+ 2 -1 0 0 501 0 0 0 6.0e+01 6.0e+01 0 0 1
+-2 -1 0 0 0 501 0 0 -1.0e+01 1.0e+01 0 0 -1
+ {pdg} 1 1 2 0 0 0.0 0.0 5.0e+01 5.0e+01 1.0e-01 0 1
+-{pdg} 1 1 2 0 0 0.0 0.0 1.0e+00 1.0e+00 1.0e-01 0 -1
+</event>
+""")
+        return 2.0, lhe
+
+    monkeypatch.setattr(common, "require_command", lambda *a, **k: "mg5_aMC")
+    monkeypatch.setattr(madgraph, "_run_single_mass", fake_madgraph)
+    cfg = replace(mini_config, channels=["drell_yan"])
+    regenerate_inputs(cfg, tmp_path / "six", mass_subset=2, gen_opts={"n_proc": 6})
+    regenerate_inputs(cfg, tmp_path / "unset", mass_subset=2)
+    assert asked == [6, 6, None, None]
+
+
+def test_regenerated_acceptance_is_used_by_the_next_compute(mini_repo, tmp_path, monkeypatch,
+                                                            stub_recompute):
+    from mcpsim.generation import pydecay
+    from mcpsim.model import compute_production
+    monkeypatch.setattr(pydecay, "acceptance_on_grid",
+                        lambda cfg, name, grid, **k: np.full(grid.size, 0.3))
+    cfg = replace(load_preset("darkquest"), channels=["meson_decay"])
+    new_cfg, _ = regenerate_inputs(cfg, tmp_path / "gen")
+    before, after = (compute_production(c).meson_channels["pi0"] for c in (cfg, new_cfg))
+    assert np.any(before > 0)
+    np.testing.assert_allclose(after, before * 0.3 / stub_recompute, rtol=1e-12)
+
+
+def test_a_regenerated_drell_yan_acceptance_is_this_detectors(mini_repo, tmp_path, monkeypatch):
+    from mcpsim.generation import madgraph
+    from mcpsim.model import compute_production
+    masses = np.loadtxt(mini_repo / "data-backup" / "mship_values.txt")
+    files = (tmp_path / "dy_cross.txt", tmp_path / "ageo_dy.txt")
+    np.savetxt(files[0], np.full(masses.size, 2.0))
+    np.savetxt(files[1], np.column_stack([masses, np.full(masses.size, 0.01)]))
+    monkeypatch.setattr(madgraph, "generate_drell_yan", lambda *a, **k: files)
+    monkeypatch.setattr(madgraph, "prepare_condor_dy", lambda *a, **k: files)
+    cfg = replace(load_preset("darkquest"), channels=["drell_yan"])
+    for opts in (None, {"condor": True, "submit": False}):
+        new_cfg, _ = regenerate_inputs(cfg, tmp_path / "gen", gen_opts=opts)
+        result = compute_production(new_cfg)
+        assert result.drell_yan.max() > 0
+        assert [w for w in result.warnings if "Drell-Yan" in w] == []
 
 
 def test_toolchain_failures_return_warnings(mini_config, tmp_path, monkeypatch):

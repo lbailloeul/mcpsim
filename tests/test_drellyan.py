@@ -49,6 +49,16 @@ def test_truncation_keeps_shorter_length(tmp_path, dy_files):
     assert m.size == y.size == 2
 
 
+def test_one_mass_scan(tmp_path):
+    cross_f, ageo_f = tmp_path / "cross.txt", tmp_path / "ageo.txt"
+    np.savetxt(cross_f, [2.6])                          # pb
+    np.savetxt(ageo_f, [[0.3, 0.05]])
+    m, y = dy_yield(str(cross_f), str(ageo_f), 1.0e20)
+    assert m.shape == y.shape == (1,)
+    assert m[0] == 0.3
+    assert y[0] == pytest.approx(1.0e9, rel=1e-12)     # 1e20 POT x 2.6 pb / 13 mb x 0.05
+
+
 def test_sigma_inel_per_nucleon_follows_target():
     from mcpsim.physics.constants import TARGET_MATERIALS as T
     from mcpsim.physics.drellyan import sigma_inel_per_nucleon_mb as s

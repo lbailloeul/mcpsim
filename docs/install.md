@@ -104,7 +104,7 @@ a scan of your conda envs for ones that carry them.
 | `Data not found at ...` | data bundle missing/mislocated | download data.zip (Zenodo), unzip, set `MCPSIM_SOURCE_REPO` to it |
 | `mass grid ... not found` | partial data tree | `mcpsim doctor --check-data` to see what's missing |
 | `no brem files matched ...` warning | brem grids absent for this energy | install the brem set, or `--channels meson_decay` |
-| `acceptance uses the PRESET-geometry file` warning | custom geometry but no PYTHIA samples | install the sample bundle (tier 2) or accept the approximation |
+| `acceptance uses the PRESET-geometry file` warning | custom geometry but no PYTHIA samples, for a file that came with the base preset | install the sample bundle (tier 2), give the file for your detector in `data.acceptance`, or accept the approximation |
 | `archived ... samples were generated at 120 GeV` | non-120 GeV beam with the python engine | generate fresh samples (tier 3) and set `engine.samples_dir` |
 | `LHAPDF::MetadataError ... AlphaS_FlavorScheme` (or `AlphaS_NumFlavors`) | LHAPDF ≥ 6.5 with an nCTEQ15 grid that predates those keys | append `AlphaS_FlavorScheme: variable` and `AlphaS_NumFlavors: 5` to `nCTEQ15_56_26.info` (on a new line) |
 | `'root-config' not found` | ROOT not sourced | activate the conda env / LCG view that has it (`mcpsim doctor` lists candidates) |

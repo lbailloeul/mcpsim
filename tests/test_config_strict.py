@@ -1,8 +1,12 @@
 """Config strictness: typos raise, silent fallbacks are gone."""
 
-import pytest
+from dataclasses import replace
 
-from mcpsim.config import Config, DataConfig, TargetConfig, load_config
+import pytest
+import yaml
+
+from mcpsim import load_preset
+from mcpsim.config import Config, DataConfig, load_config, normalize_target
 
 
 def _write(tmp_path, text):
@@ -11,22 +15,55 @@ def _write(tmp_path, text):
     return p
 
 
+def _load(tmp_path, raw):
+    return load_config(_write(tmp_path, yaml.safe_dump(raw)))
+
+
 def test_unknown_detector_key_raises(tmp_path):
     p = _write(tmp_path, "name: t\ndetector: {radius: 1.0}\n")
     with pytest.raises(ValueError, match="unknown key.*detector.*radius_m"):
         load_config(p)
 
 
-def test_unknown_target_material_raises():
-    with pytest.raises(ValueError, match="unknown target material 'lead'"):
-        TargetConfig.from_dict({"name": "lead"})
+@pytest.mark.parametrize("spec", [{"name": "lead"}, {"name": "Lead", "Z": 82, "A": 207.2}])
+def test_unknown_target_material_raises(tmp_path, spec):
+    with pytest.raises(ValueError, match="unknown target material"):
+        _load(tmp_path, {"preset": "ship", "target": spec})
 
 
-def test_custom_target_with_full_params_ok():
-    t = TargetConfig.from_dict({"name": "lead", "Z": 82, "A": 207.2,
-                                "density_g_cm3": 11.35,
-                                "interaction_length_cm": 17.6})
-    assert t.Z == 82 and t.A == 207.2
+def test_custom_target_with_full_params_ok(tmp_path):
+    t = _load(tmp_path, {"preset": "ship", "target": {
+        "name": "lead", "Z": 82, "A": 207.2, "density_g_cm3": 11.35,
+        "interaction_length_cm": 17.6}}).target
+    assert (t.name, t.Z, t.A, t.density_g_cm3, t.interaction_length_cm) == (
+        "lead", 82, 207.2, 11.35, 17.6)
+
+
+def test_acceptance_overrides_merge_per_meson(tmp_path):
+    cfg = _load(tmp_path, {"preset": "darkquest",
+                           "data": {"acceptance": {"pi0": "/work/pi0.txt", "eta": None}}})
+    expected = {m: f for m, f in load_preset("darkquest").data.acceptance.items() if m != "eta"}
+    assert cfg.data.acceptance == {**expected, "pi0": "/work/pi0.txt"}
+
+
+def test_acceptance_meson_typo_raises(tmp_path):
+    with pytest.raises(ValueError, match="pio"):
+        _load(tmp_path, {"preset": "darkquest", "data": {"acceptance": {"pio": "/work/pi0.txt"}}})
+
+
+def test_partial_target_override_keeps_the_base_material(tmp_path):
+    cfg = _load(tmp_path, {"preset": "ship", "target": {"density_g_cm3": 8.0}})
+    assert cfg.target == replace(load_preset("ship").target, density_g_cm3=8.0)
+
+
+@pytest.mark.parametrize("spelling, preset", [
+    ("Iron", "darkquest"), (" IRON ", "darkquest"), ("FE", "darkquest"),
+    ("Mo", "ship"), (" MO ", "ship"), ("TZM", "ship"), ("Graphite", "flame")])
+def test_yaml_target_names_normalise_like_the_target_flag(tmp_path, spelling, preset):
+    # a tungsten base, so the result can only come from the name
+    target = _load(tmp_path, {"preset": "lanl_12bar", "target": {"name": spelling}}).target
+    assert target == load_preset(preset).target
+    assert target.name == normalize_target(spelling)
 
 
 def test_beam_energy_tolerance():
@@ -192,34 +229,62 @@ def test_target_aliases_in_yaml(tmp_path):
 
 
 def test_legacy_fidelity_models_the_published_detector(tmp_path):
-    from dataclasses import replace
-    from mcpsim import geometry, load_preset
+    from mcpsim import geometry
     from mcpsim.config import run_config
-    from mcpsim.model import acceptance_files_valid
+    from mcpsim.model import acceptance_file_valid
     cfg = load_preset("darkquest")
+    preset_file = cfg.data.acceptance["pi0"]
     legacy = replace(cfg, engine=replace(cfg.engine, fidelity="legacy"))
     # default: the 1 x 1 m face, for which the archived files are not valid
     assert geometry.face_signature(run_config(cfg).detector) == "1 x 1 m face at 40 m"
-    assert not acceptance_files_valid(run_config(cfg))
+    assert not acceptance_file_valid(run_config(cfg), preset_file)
     # legacy: the paper's disc and its files
     assert run_config(legacy).detector == cfg.legacy_detector
-    assert acceptance_files_valid(run_config(legacy))
+    assert acceptance_file_valid(run_config(legacy), preset_file)
     assert run_config(run_config(legacy)) == run_config(legacy)          # idempotent
     # a config's own detector is kept even under legacy
     p = _write(tmp_path, "preset: darkquest\nengine: {fidelity: legacy}\n"
                          "detector: {distance_m: 60.0}\n")
     own = run_config(load_config(p))
     assert geometry.face_signature(own.detector) == "1 x 1 m face at 60 m"
-    assert not acceptance_files_valid(own)
+    assert not acceptance_file_valid(own, preset_file)
     # presets without a separate published detector are unaffected
     flame = load_preset("flame")
-    assert flame.legacy_detector is None and acceptance_files_valid(flame)
+    assert flame.legacy_detector is None and acceptance_file_valid(flame, preset_file)
 
 
 def test_legacy_detector_is_strict(tmp_path):
     p = _write(tmp_path, "preset: darkquest\nlegacy_detector: {radius: 0.5}\n")
     with pytest.raises(ValueError, match="legacy_detector"):
         load_config(p)
+
+
+def test_a_run_record_loads_back_as_the_recorded_config(tmp_path):
+    from mcpsim.config import pin_supplied_acceptance, run_config
+    from mcpsim.pipeline import write_run_record
+    own = _load(tmp_path, {"beam": {"energy_gev": 122.0}, "detector": {"distance_m": 60.0},
+                           "data": {"dy_cross": "my_scan.txt", "dy_ageo": "/work/my_ageo.txt",
+                                    "acceptance": {"pi0": "/work/pi0.txt"}}})
+    assert own.notes and not (own.geometry_is_preset or own.dy_cross_is_preset)
+    cfgs = [own, pin_supplied_acceptance(own)]
+    for name in ("darkquest", "ship", "lanl_12bar", "flame"):
+        cfg = load_preset(name)
+        cfgs += [cfg, run_config(replace(cfg, engine=replace(cfg.engine, fidelity="legacy")))]
+    for i, cfg in enumerate(cfgs):
+        out = tmp_path / f"run{i}"
+        out.mkdir()
+        assert load_config(write_run_record(cfg, out)) == cfg
+
+
+def test_a_run_record_is_read_strictly(tmp_path):
+    from mcpsim.pipeline import write_run_record
+    path = write_run_record(load_preset("darkquest"), tmp_path)
+    record = yaml.safe_load(path.read_text())
+    for edited in ({**record, "beam": {"energy_gev": 400.0}},
+                   {**record, "config": {**record["config"], "beam_energy": 400.0}}):
+        path.write_text(yaml.safe_dump(edited, sort_keys=False))
+        with pytest.raises(ValueError):
+            load_config(path)
 
 
 def test_config_round_trips_through_its_record():

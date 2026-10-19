@@ -93,8 +93,10 @@ RUN_CARD_SETTINGS = {
 
 
 def generate_drell_yan(cfg: Config, masses: np.ndarray, work_dir: Path, *,
-                       nevents: int = DY_NEVENTS_DEFAULT) -> Tuple[Path, Path]:
-    """Run MadGraph over the mass grid; return (dy_cross_file, dy_ageo_file)."""
+                       nevents: int = DY_NEVENTS_DEFAULT,
+                       n_proc: Optional[int] = None) -> Tuple[Path, Path]:
+    """Run MadGraph over the mass grid on n_proc cores (None: MadGraph's own
+    setting); return (dy_cross_file, dy_ageo_file)."""
     common.require_command("mg5_aMC", "Install MadGraph5_aMC@NLO and add mg5_aMC to PATH.")
     work_dir.mkdir(parents=True, exist_ok=True)
     model = _local_model(_resolve_model(cfg), work_dir)
@@ -104,7 +106,7 @@ def generate_drell_yan(cfg: Config, masses: np.ndarray, work_dir: Path, *,
     accs: List[float] = []
     for mchi in masses:
         sigma_pb, acc, _, _ = _run_mass(cfg, model, float(mchi), work_dir / f"dy_m{mchi:.6g}",
-                                        nevents=nevents)
+                                        nevents=nevents, cores=n_proc)
         sigmas.append(sigma_pb)
         accs.append(acc)
     return _write_scan(cfg, work_dir, masses, sigmas, accs)
@@ -266,10 +268,10 @@ def parse_cross_section(proc_dir: Path) -> float:
 
 def parse_lhe_acceptance(lhe_path: Path | str, mcp_pdg: int, cfg: Config,
                          boost_y: float = 0.0) -> Tuple[int, int]:
-    """Count events and millicharged particles entering the detector aperture
-    (cylindrical theta cut, or rectangular bar-array face) in an LHE file,
-    after boosting the events along the beam by rapidity `boost_y` (the lab
-    rapidity of their frame, lab_rapidity(cfg) for mcpsim's MadGraph runs).
+    """Count events and millicharged particles entering the detector face
+    (the disc or the bar-array rectangle, at its off-axis offset) in an LHE
+    file, after boosting the events along the beam by rapidity `boost_y` (the
+    lab rapidity of their frame, lab_rapidity(cfg) for mcpsim's MadGraph runs).
 
     Returns (n_total, n_hits); n_hits counts chi and chi-bar separately, so
     n_hits / (2 n_total) is the per-chi acceptance — the convention of the
@@ -313,12 +315,17 @@ def parse_lhe_acceptance(lhe_path: Path | str, mcp_pdg: int, cfg: Config,
 def _in_acceptance(px: float, py: float, pz: float, det) -> bool:
     if pz <= 0:
         return False
+    # The face centre sits at the off-axis offset d along +x on the plane
+    # z = distance, as in geometry.hit_fraction.
+    d = float(geometry.offaxis_offset_m(det))
     if det.type == "cylindrical":
-        theta = math.atan2(math.hypot(px, py), pz)
+        # |crossing point - centre| < radius, kept in the cone-cut form so an
+        # on-axis disc gives the same verdicts to the last bit.
+        theta = math.atan2(math.hypot(px - d * pz / det.distance_m, py), pz)
         return theta < geometry.cylindrical_theta_cut(det.radius_m, det.distance_m)
     # bar-array rectangular face at z = distance.
     width, height = geometry.bar_array_dims(det)
-    x_at = det.distance_m * px / pz
+    x_at = det.distance_m * px / pz - d
     y_at = det.distance_m * py / pz
     return abs(x_at) <= 0.5 * width and abs(y_at) <= 0.5 * height
 

@@ -8,14 +8,14 @@ channel degrades gracefully to the precomputed input if its toolchain is absent.
 from __future__ import annotations
 
 import datetime
-from dataclasses import asdict, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from . import paths
-from .config import Config, run_config
+from . import geometry, paths
+from .config import Config, mark_acceptance_supplied, run_config, run_record
 from .model import ProductionResult, compute_production, drell_yan_table
 from .physics.constants import MESONS
 from .plotting.limits import plot_limit
@@ -148,15 +148,15 @@ def write_limit_curve(cfg: Config, masses: np.ndarray, eps: np.ndarray, floor: f
 
 def write_run_record(cfg: Config, out_dir: Path) -> Path:
     """Record the fully resolved configuration (preset + config + CLI flags)
-    next to the outputs, so every table and plot can be traced and rerun."""
+    next to the outputs, so every table and plot can be traced, and rerun
+    with `mcpsim run --config run_<tag>.yaml`."""
     import yaml
 
-    from . import __version__
-    record = {"mcpsim_version": __version__, "data_source": str(paths.source_repo()),
-              "config": asdict(cfg)}
+    dy = None
     if "drell_yan" in cfg.channels:
         table = drell_yan_table(cfg)
-        record["drell_yan_cross_sections"] = str(table) if table else cfg.data.dy_cross
+        dy = str(table) if table else cfg.data.dy_cross
+    record = run_record(cfg, data_source=str(paths.source_repo()), drell_yan_cross_sections=dy)
     path = Path(out_dir) / f"run_{cfg.tag}.yaml"
     path.write_text(yaml.safe_dump(record, sort_keys=False))
     return path
@@ -168,12 +168,13 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
 
     Imported lazily so fast mode never needs the generation dependencies.
     `gen_opts` tunes resolution: trials, n_proc, brem_grid_size, brem_neval,
-    brem_nitn, dy_nevents (all optional; sensible defaults otherwise), and
-    condor/submit send brem and Drell-Yan to HTCondor batches. Each channel that
-    cannot run (missing toolchain, unsupported geometry) degrades to its
-    precomputed input; the reason is printed immediately AND returned so the
-    CLI can repeat it in the end-of-run report instead of letting it scroll
-    away mid-run.
+    brem_nitn, dy_nevents (all optional; one left out keeps the backend's own
+    default), and condor/submit send brem and Drell-Yan to HTCondor batches.
+    Every acceptance file it writes is recorded as made for cfg.detector, the
+    detector the backends were given. Each channel that cannot run (missing
+    toolchain, unsupported geometry) degrades to its precomputed input; the
+    reason is printed immediately AND returned so the CLI can repeat it in the
+    end-of-run report instead of letting it scroll away mid-run.
     """
     from .generation import brem_run, decay, madgraph, mesons
     from .generation.common import ToolchainError
@@ -191,6 +192,7 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
         grid = grid[:: max(1, grid.size // mass_subset)][:mass_subset]
 
     data = cfg.data
+    written: List[str] = []
 
     if "meson_decay" in cfg.channels:
         # Yields need per-POT multiplicities; regeneration cannot supply them
@@ -225,6 +227,7 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
                                              trials=opts.get("trials", _trials(mass_subset)))
                     acc[name] = str(decay.run_decay_scan(cfg, name, source, grid,
                                                          gen_dir / "decay"))
+                written.append(acc[name])
             except ToolchainError as exc:
                 _skip(f"meson '{name}' regeneration skipped: {exc}")
         data = replace(data, acceptance=acc)
@@ -232,26 +235,18 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
     if "brem" in cfg.channels:
         try:
             brem_masses = grid[grid < 1.0]
+            brem_kw = _given(opts, n_proc="n_proc", brem_nitn="nitn",
+                             brem_neval="neval", brem_grid_size="grid_size")
             if opts.get("condor"):
                 # Emit/submit an HTCondor batch; jobs run asynchronously, so the
                 # brem files won't exist yet this run.
-                out = brem_run.prepare_condor_brem(
-                    cfg, brem_masses, gen_dir / "brem",
-                    n_proc=opts.get("n_proc", 8), nitn=opts.get("brem_nitn", 10),
-                    neval=opts.get("brem_neval", 4000),
-                    grid_size=opts.get("brem_grid_size", 100),
-                    submit=opts.get("submit", True),
-                )
+                out = brem_run.prepare_condor_brem(cfg, brem_masses, gen_dir / "brem",
+                                                   **brem_kw, **_given(opts, submit="submit"))
                 warnings.append(
                     f"brem is running as an HTCondor batch in {gen_dir / 'brem'}; "
                     f"this run has none until the jobs finish (see README_condor.txt there).")
             else:
-                out = brem_run.regenerate_brem(
-                    cfg, brem_masses, gen_dir / "brem",
-                    n_proc=opts.get("n_proc", 4), nitn=opts.get("brem_nitn", 10),
-                    neval=opts.get("brem_neval", 4000),
-                    grid_size=opts.get("brem_grid_size", 100),
-                )
+                out = brem_run.regenerate_brem(cfg, brem_masses, gen_dir / "brem", **brem_kw)
             data = replace(data, brem_dir=str(out), brem_pattern="Brem_*.txt")
         except ToolchainError as exc:
             _skip(f"brem regeneration skipped (using precomputed): {exc}")
@@ -259,29 +254,37 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
     dy_scan = False
     if "drell_yan" in cfg.channels:
         try:
-            nevents = opts.get("dy_nevents") or madgraph.DY_NEVENTS_DEFAULT
+            dy_kw = _given(opts, n_proc="n_proc", dy_nevents="nevents")
             if opts.get("condor"):
                 dy_cross, dy_ageo = madgraph.prepare_condor_dy(
-                    cfg, grid, gen_dir / "dy", n_proc=opts.get("n_proc", 4),
-                    nevents=nevents, submit=opts.get("submit", True))
+                    cfg, grid, gen_dir / "dy", **dy_kw, **_given(opts, submit="submit"))
                 warnings.append(
                     f"Drell-Yan is running as an HTCondor batch in {gen_dir / 'dy'}; "
                     f"this run has none until the jobs finish (see README_condor.txt there).")
             else:
                 dy_cross, dy_ageo = madgraph.generate_drell_yan(cfg, grid, gen_dir / "dy",
-                                                                nevents=nevents)
+                                                                **dy_kw)
             # MadGraph runs with the archived iron nPDF for both beams. The
             # scan is used as it is, like a data.dy_cross from a config, not
             # replaced by the built-in table (model.drell_yan_table).
             data = replace(data, dy_cross=str(dy_cross), dy_ageo=str(dy_ageo),
                            dy_material=madgraph.DY_PDF_MATERIAL)
+            written.append(str(dy_ageo))
             dy_scan = True
         except ToolchainError as exc:
             _skip(f"Drell-Yan regeneration skipped (using precomputed): {exc}")
 
-    cfg = replace(cfg, data=data)
+    cfg = mark_acceptance_supplied(replace(cfg, data=data), written,
+                                   geometry.face_signature(cfg.detector))
     return (replace(cfg, dy_cross_is_preset=False) if dy_scan else cfg), warnings
 
 
 def _trials(mass_subset: Optional[int]) -> int:
     return 100_000 if mass_subset else 10_000_000
+
+
+def _given(opts: dict, **names: str) -> dict:
+    """Backend keyword arguments for the gen_opts the caller set, renamed from
+    gen_opts key to backend parameter. An option left out is not forwarded,
+    so the backend signature is the one place its default lives."""
+    return {param: opts[key] for key, param in names.items() if opts.get(key) is not None}

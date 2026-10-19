@@ -40,7 +40,8 @@ mcpsim-output/<experiment-tag>/
   limit_<tag>.pdf        exclusion plot over the existing-constraint envelope,
                          with and without proton brem (+ .png)
   run_<tag>.yaml         the fully resolved config (preset + config + CLI
-                         flags), mcpsim version and data location
+                         flags), mcpsim version and data location; rerun it
+                         exactly with `mcpsim run --config run_<tag>.yaml`
   generated/             (only with --regenerate) fresh backend outputs
 mcpsim-output/cache/
   acceptance/<hash>/     Python-engine acceptance cache + JSON provenance
@@ -79,8 +80,11 @@ target:                    # brem (luminosity + sigma_pA rescale of the grids)
                            #   normalisation); per-POT meson rates are
                            #   material-independent. Known names: iron,
                            #   molybdenum, tungsten, carbon (aliases fe, mo,
-                           #   tzm, w, c, graphite). Unknown names REQUIRE the
-                           #   full four parameters (and have no DY table):
+                           #   tzm, w, c, graphite), in any case. A section
+                           #   without a name keeps the base preset's material
+                           #   and changes only the numbers it gives. Unknown
+                           #   names REQUIRE the full four parameters (and
+                           #   have no DY table):
   # Z: 26
   # A: 55.845
   # density_g_cm3: 7.87
@@ -113,7 +117,8 @@ engine:
   decay: python            # python | cpp (see README "engines")
   fidelity: corrected      # corrected | legacy (bit-for-bit published numbers)
   samples_dir: null        # override the archived PYTHIA sample location
-  seed: 20260727           # engine RNG seed (acceptance cache key includes it)
+  seed: 20260727           # RNG seed of every engine, the C++ generators
+                           #   included (acceptance cache key includes it)
   quick: false             # capped statistics for smoke runs (not cached)
 
 sensitivity:               # detection D(eps) = (1-exp(-n_gamma eps^2))^a eps^2
@@ -137,7 +142,11 @@ channels: [meson_decay, brem, drell_yan]
 data:                      # fast-mode inputs; bare names resolve inside the
                            #   source repo (data-backup/ first, then the root)
   mass_grid: mship_values.txt
-  acceptance:              # meson -> (mass, per-chi acceptance) file
+  acceptance:              # meson -> (mass, per-chi acceptance) file. It
+                           #   merges per meson onto the base preset's: null
+                           #   drops one, an unknown meson raises. A file a
+                           #   config names is used as it is, and a detector
+                           #   moved with --offaxis recomputes it.
     pi0: total_efficiency_outputdecayPionDARK.txt
   brem_dir: DarkQuest-brem-backup
   brem_pattern: "Brem_120GeV_*.txt"

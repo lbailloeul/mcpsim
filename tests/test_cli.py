@@ -1,5 +1,8 @@
 """CLI behavior via CliRunner: clean errors, guards, exit codes."""
 
+import re
+
+import numpy as np
 import pytest
 from click.testing import CliRunner
 
@@ -9,6 +12,78 @@ from mcpsim.cli import cli
 @pytest.fixture
 def runner():
     return CliRunner()
+
+
+def test_a_run_record_reruns_the_recorded_config(runner, mini_repo, tmp_path):
+    import yaml
+    src = tmp_path / "mini.yaml"
+    # 122 GeV adds a config note and the detector override clears
+    # geometry_is_preset, so the record carries the internal fields
+    src.write_text("name: mini\nbeam: {energy_gev: 122.0}\nchannels: [mesons]\n"
+                   "detector: {distance_m: 60.0}\n"
+                   "data: {mass_grid: mship_values.txt, acceptance: {pi0: acc_pi0.txt}}\n")
+    first = runner.invoke(cli, ["production", "-c", str(src), "-o", str(tmp_path / "a")])
+    assert first.exit_code == 0, first.output
+    again = runner.invoke(cli, ["production", "-c", str(tmp_path / "a" / "run_mini.yaml"),
+                                "-o", str(tmp_path / "b")])
+    assert again.exit_code == 0, again.output
+
+    def record(d):
+        return yaml.safe_load((tmp_path / d / "run_mini.yaml").read_text())
+
+    assert record("a")["config"]["notes"] and not record("a")["config"]["geometry_is_preset"]
+    assert record("b") == record("a")
+    assert ((tmp_path / "b" / "production_mini.txt").read_text()
+            == (tmp_path / "a" / "production_mini.txt").read_text())
+
+
+def _production_column(path, column):
+    names = path.read_text().splitlines()[0].lstrip("# ").split()
+    return np.loadtxt(path)[:, names.index(column)]
+
+
+def test_an_offaxis_move_recomputes_a_supplied_file_loudly(runner, mini_repo, tmp_path,
+                                                           stub_recompute, flat_acceptance):
+    own = flat_acceptance("pi0_own.txt", 0.4)
+    pi0, output = {}, {}
+    for name, data in (("own", f"data: {{acceptance: {{pi0: {own}}}}}\n"), ("preset", "")):
+        cfg = tmp_path / f"{name}.yaml"
+        cfg.write_text(f"name: {name}\npreset: darkquest\nchannels: [mesons]\n{data}")
+        r = runner.invoke(cli, ["production", "-c", str(cfg), "--offaxis", "4",
+                                "-o", str(tmp_path / name)])
+        assert r.exit_code == 0, r.output
+        pi0[name] = _production_column(tmp_path / name / f"production_{name}_4mrad.txt", "pi0")
+        output[name] = r.output
+    np.testing.assert_array_equal(pi0["own"], pi0["preset"])
+    assert str(own) in output["own"]
+
+
+def test_a_file_the_config_names_survives_fidelity_legacy_on_the_cli(
+        runner, mini_repo, tmp_path, stub_recompute, flat_acceptance):
+    pi0 = {}
+    for value in (0.4, 0.2):
+        name = f"own{value * 10:.0f}"
+        cfg = tmp_path / f"{name}.yaml"
+        cfg.write_text(f"name: {name}\npreset: darkquest\nchannels: [mesons]\n"
+                       f"data: {{acceptance: {{pi0: {flat_acceptance(name + '.txt', value)}}}}}\n")
+        r = runner.invoke(cli, ["production", "-c", str(cfg), "--fidelity", "legacy",
+                                "-o", str(tmp_path / name)])
+        assert r.exit_code == 0, r.output
+        pi0[value] = _production_column(tmp_path / name / f"production_{name}_legacy.txt", "pi0")
+    assert np.any(pi0[0.4] > 0)
+    np.testing.assert_allclose(pi0[0.4], 2 * pi0[0.2], rtol=1e-7)
+
+
+def test_condor_brem_bundles_ask_the_same_cores_from_both_commands(runner, mini_repo, tmp_path):
+    def cpus(out, *cmd):
+        r = runner.invoke(cli, [*cmd, "--preset", "darkquest", "--condor", "--no-submit",
+                                "--mass-subset", "2", "-o", str(tmp_path / out)])
+        assert r.exit_code == 0, r.output
+        sub = (tmp_path / out / "generated" / "brem" / "brem.sub").read_text()
+        return re.search(r"request_cpus\s*=\s*(\d+)", sub).group(1)
+
+    assert cpus("gen", "generate", "brem") == cpus("run", "run", "--channels", "brem")
+    assert cpus("gen6", "generate", "brem", "--n-proc", "6") == "6"
 
 
 def test_presets_lists_all(runner):

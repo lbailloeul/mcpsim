@@ -62,6 +62,29 @@ def test_lhe_events_are_boosted_to_the_lab(tmp_path):
     assert parse_lhe_acceptance(lhe, MCP_PDG_DEFAULT, cfg, boost_y=lab_rapidity(cfg)) == (1, 1)
 
 
+@pytest.mark.parametrize("face", [{}, {"type": "cylindrical", "radius_m": 0.1}],
+                         ids=["bar_array", "disc"])
+def test_off_axis_face_counts_the_chi_aimed_at_its_centre(tmp_path, face):
+    from dataclasses import replace
+    flame = load_preset("flame")  # 20 x 20 cm face at 1 km, 4 m beside the beam axis
+    cfg = replace(flame, detector=replace(flame.detector, **face))
+    lhe = tmp_path / "offaxis.lhe"
+
+    def chi_hits(px, pz=10.0):
+        lhe.write_text(f"""<event>
+ 4 1 +1.0e-03 1.0e02 7.5e-03 1.2e-01
+ 2 -1 0 0 501 0 0 0 1.0e+01 1.0e+01 0 0 1
+-2 -1 0 0 0 501 0 0 -1.0e+01 1.0e+01 0 0 -1
+ {MCP_PDG_DEFAULT} 1 1 2 0 0 {px:.12e} 0.0 {pz:.12e} {np.hypot(px, pz):.12e} 1.0e-03 0 1
+-{MCP_PDG_DEFAULT} 1 1 2 0 0 0.0 0.0 -1.0e+01 1.0e+01 1.0e-03 0 -1
+</event>
+""")
+        return parse_lhe_acceptance(lhe, MCP_PDG_DEFAULT, cfg)[1]
+
+    at_face_centre = 10.0 * np.tan(1e-3 * flame.detector.offaxis_mrad)
+    assert (chi_hits(at_face_centre), chi_hits(0.0)) == (1, 0)
+
+
 @pytest.mark.skipif(not _SOURCE_REPO_PRESENT, reason="source repo (mCP_brem.py) unavailable")
 def test_brem_patcher_rewrites_globals(tmp_path):
     cfg = load_preset("ship")  # 400 GeV, molybdenum -> different globals than the script default

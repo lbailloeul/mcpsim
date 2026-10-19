@@ -50,8 +50,8 @@ def dy_yield(dy_cross_file: str, dy_ageo_file: str, n_pot: float,
              sigma_inelastic_mb: float = SIGMA_PN_INELASTIC_MB,
              ) -> Tuple[np.ndarray, np.ndarray]:
     """Baseline DY yield (N_chi/eps^2) vs mass; returns (masses, yields)."""
-    cross = np.loadtxt(dy_cross_file)
-    ageo_data = np.loadtxt(dy_ageo_file)
+    cross = np.atleast_1d(np.loadtxt(dy_cross_file))
+    ageo_data = np.atleast_2d(np.loadtxt(dy_ageo_file))
 
     mass = ageo_data[:, 0]
     ageo = ageo_data[:, 1]
