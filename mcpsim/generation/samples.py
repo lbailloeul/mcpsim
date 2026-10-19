@@ -22,6 +22,7 @@ import numpy as np
 
 from .. import paths
 from ..config import Config
+from ..physics import constants as C
 from . import common
 
 Parents = Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]  # px, py, pz, E
@@ -37,8 +38,8 @@ class SampleSpec:
 
 # Archived parent samples, by beam energy. Using a sample from the wrong beam
 # would silently produce wrong kinematics, so each set is keyed by the energy
-# it was generated at and matched within 2% (the same rule as
-# constants.C_MESON_BY_BEAM).
+# it was generated at and matched by constants.same_beam, like
+# constants.C_MESON_BY_BEAM.
 #
 # n_use x repeats is tuned for ~2-3% clustered MC error (8% for jpsi, limited by
 # its few thousand parents) on a ~4e-8 sr face at 1 km; see the FLAME off-axis
@@ -76,9 +77,9 @@ def _sample_set(cfg: Config) -> Optional[Dict[str, SampleSpec]]:
     With engine.samples_dir set the user supplies their own files, so the beam
     guard is waived and the 120 GeV naming is used as the filename convention.
     """
-    from ..config import _beam_key
-    key = _beam_key(cfg.beam.energy_gev)
-    if key in DEFAULT_SAMPLES:
+    key = next((k for k in DEFAULT_SAMPLES
+                if C.same_beam(cfg.beam.energy_gev, float(k))), None)
+    if key is not None:
         return DEFAULT_SAMPLES[key]
     return DEFAULT_SAMPLES["120"] if cfg.engine.samples_dir else None
 
@@ -118,9 +119,9 @@ def load_parents(cfg: Config, meson: str, *, quick: bool = False
     if specs is None:
         raise common.ToolchainError(
             f"no archived parent samples for a {cfg.beam.energy_gev:g} GeV beam "
-            f"(available: {', '.join(DEFAULT_SAMPLES)} GeV, matched within 2%). "
-            f"Generate samples for this energy (`mcpsim generate mesons`, needs "
-            f"PYTHIA) and point engine.samples_dir at them."
+            f"(available: {', '.join(DEFAULT_SAMPLES)} GeV, matched within "
+            f"{C.BEAM_MATCH:.0%}). Generate samples for this energy (`mcpsim "
+            f"generate mesons`, needs PYTHIA) and point engine.samples_dir at them."
         )
     import uproot
 

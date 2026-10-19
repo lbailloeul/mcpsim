@@ -138,6 +138,24 @@ def test_meson_backend_dispatch():
     assert mesons.choose_backend(load_preset("lanl_12bar")) == "burman_smith"
 
 
+def test_archived_samples_follow_the_beam_within_two_percent():
+    from dataclasses import replace
+    from mcpsim.generation import samples
+    base = load_preset("darkquest")
+
+    def pi0_file(energy_gev, samples_dir=None):
+        cfg = replace(base, beam=replace(base.beam, energy_gev=energy_gev),
+                      engine=replace(base.engine, samples_dir=samples_dir))
+        spec = samples.sample_spec(cfg, "pi0")
+        return spec.file if spec else None
+
+    assert pi0_file(121.0) == pi0_file(120.0) == samples.DEFAULT_SAMPLES["120"]["pi0"].file
+    assert pi0_file(395.0) == samples.DEFAULT_SAMPLES["400"]["pi0"].file
+    assert pi0_file(130.0) is None
+    assert pi0_file(0.8) is None                    # tabulated multiplicities, no samples
+    assert pi0_file(130.0, samples_dir="/own") is not None
+
+
 def test_bundled_brem_generator_is_valid_python():
     # a C-style '// Author' line once broke every brem regeneration
     import py_compile

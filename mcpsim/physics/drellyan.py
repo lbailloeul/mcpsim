@@ -34,7 +34,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-from .constants import MB_TO_PB, N_AVOGADRO, SIGMA_PN_INELASTIC_MB
+from .constants import MB_TO_PB, N_AVOGADRO, SIGMA_PN_INELASTIC_MB, same_beam
 
 
 def sigma_inel_per_nucleon_mb(density_g_cm3: float, interaction_length_cm: float) -> float:
@@ -98,13 +98,13 @@ def load_table(path: str | Path) -> DYTable:
 
 def find_table(directory: str | Path, energy_gev: float, material: str) -> Optional[Path]:
     """The table dy_sigma_<material>_<E>GeV.txt in `directory` whose beam energy
-    is within 2% of energy_gev, or None."""
+    matches energy_gev (constants.same_beam), or None."""
     for path in sorted(Path(directory).glob(f"dy_sigma_{material}_*GeV.txt")):
         try:
             e = float(path.stem.rsplit("_", 1)[1][:-3])
         except ValueError:
             continue
-        if abs(energy_gev - e) <= 0.02 * e:
+        if same_beam(energy_gev, e):
             return path
     return None
 

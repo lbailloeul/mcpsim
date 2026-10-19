@@ -349,28 +349,18 @@ class Config:
         """
         if self.data.c_meson:
             return dict(self.data.c_meson)
-        key = _beam_key(self.beam.energy_gev)
+        key = next((k for k in C.C_MESON_BY_BEAM
+                    if C.same_beam(self.beam.energy_gev, float(k))), None)
         if key is not None:
             return dict(C.C_MESON_BY_BEAM[key])
         tabulated = ", ".join(f"{k} GeV" for k in C.C_MESON_BY_BEAM)
         raise ValueError(
             f"No tabulated meson multiplicities for beam energy "
             f"{self.beam.energy_gev} GeV (tabulated: {tabulated}; matched "
-            f"within 2%). Provide data.c_meson in the config — a mapping of "
-            f"per-POT meson multiplicities from your generator, e.g. "
+            f"within {C.BEAM_MATCH:.0%}). Provide data.c_meson in the config — a "
+            f"mapping of per-POT meson multiplicities from your generator, e.g. "
             f"data: {{c_meson: {{pi0: 4.7, eta: 0.53, ...}}}}."
         )
-
-def _beam_key(energy_gev: float) -> Optional[str]:
-    """Key into C_MESON_BY_BEAM if the energy matches a tabulated beam within
-    2%, else None (previously any energy was rounded to the nearest GeV, so
-    e.g. 120.5 GeV silently reused the 120 GeV multiplicities)."""
-    for key in C.C_MESON_BY_BEAM:
-        tab = float(key)
-        if abs(energy_gev - tab) <= 0.02 * tab:
-            return key
-    return None
-
 
 def run_record(cfg: Config, *, data_source: str,
                drell_yan_cross_sections: Optional[str] = None) -> dict:

@@ -78,11 +78,11 @@ LOW_ENERGY_MESONS = ("pi0", "eta")
 # has to borrow the J/psi acceptance (see UPSILON_FAMILIES below).
 #
 # These are per-beam-energy: change the beam and every value changes. mcpsim
-# will not extrapolate -- an energy outside the tabulated set (matched within
-# 2%) raises, and you must supply data.c_meson yourself. Note that --regenerate
-# does NOT fill this in for you: it produces new parent samples but never counts
-# them, so the multiplicity for a new energy still has to be computed by hand as
-# entries / trials.
+# will not extrapolate -- an energy outside the tabulated set (matched by
+# same_beam, below) raises, and you must supply data.c_meson yourself. Note
+# that --regenerate does NOT fill this in for you: it produces new parent
+# samples but never counts them, so the multiplicity for a new energy still
+# has to be computed by hand as entries / trials.
 #
 # The 120 GeV J/psi is carried at full precision (4087 parents / 1e8 trials);
 # the published plotting scripts rounded it to 4.0e-5. Do not "correct" it back.
@@ -101,6 +101,15 @@ C_MESON_BY_BEAM: Dict[str, Dict[str, float]] = {
     "0.8": {"pi0": 0.115, "eta": 0.115 / 30.0},
 }
 
+# Inputs tabulated at one beam energy (C_MESON_BY_BEAM, the archived parent
+# samples, the Drell-Yan tables) are reused for a beam within this fraction
+# of it.
+BEAM_MATCH = 0.02
+
+
+def same_beam(energy_gev: float, tabulated_gev: float) -> bool:
+    """True when inputs tabulated at tabulated_gev may be reused at energy_gev."""
+    return abs(energy_gev - tabulated_gev) <= BEAM_MATCH * tabulated_gev
 
 
 @dataclass(frozen=True)
