@@ -29,7 +29,7 @@ import numpy as np
 
 from .. import paths
 from ..config import Config
-from ..physics.constants import M_PROTON
+from ..physics.dy_lo import fixed_target_s
 from . import common
 
 
@@ -251,7 +251,7 @@ def _prepare_patched_script(cfg: Config, work_dir: Path) -> Path:
     text = src.read_text()
 
     t = cfg.target
-    sqrt_s = math.sqrt(2.0 * M_PROTON * (cfg.beam.energy_gev + M_PROTON))
+    sqrt_s = math.sqrt(fixed_target_s(cfg.beam.energy_gev))
     # lambda_int_gcm2 / rho == interaction_length_cm  -> keep that identity.
     lambda_gcm2 = t.interaction_length_cm * t.density_g_cm3
     n_bar, bar_size = _generator_face(cfg.detector)

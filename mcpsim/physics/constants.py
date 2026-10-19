@@ -17,6 +17,10 @@ ALPHA_EM = 1.0 / 137.0
 # tables keep it so that they differ from the paper in the PDFs only; alpha at
 # the DY scale (~1/133) would lower every DY rate by ~8%.
 ALPHA_EM_DY = 1.0 / 127.9
+# The archived scans' pair-mass cut M(chi chi~) >= 2 GeV (below it the vector
+# mesons cover the region), applied by the built-in tables and the MadGraph
+# run card alike.
+DY_PAIR_MASS_MIN_GEV = 2.0
 M_PROTON = 0.9383          # GeV
 M_ELECTRON = 0.00051       # GeV
 N_AVOGADRO = 6.02214076e23  # /mol

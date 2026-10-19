@@ -36,6 +36,7 @@ import numpy as np
 
 from .. import __version__, geometry, paths
 from ..config import Config, config_from_record
+from ..physics.constants import DY_PAIR_MASS_MIN_GEV
 from ..physics.dy_lo import fixed_target_s, fixed_target_y_cm
 from . import common
 
@@ -79,7 +80,6 @@ def _model_has_z(model: str) -> bool:
 # proton beam on a nucleus target is beyond one lhaid (pipeline.
 # regenerate_inputs; generation/dy_tables.py).
 DY_PDF_SET, DY_PDF_LHAID, DY_PDF_MATERIAL = "nCTEQ15_56_26", 100600, "iron"
-DY_PAIR_MASS_MIN_GEV = 2.0
 # MadGraph's default; ~3.5% statistics on a per-chi acceptance of 0.04.
 DY_NEVENTS_DEFAULT = 10000
 

@@ -60,10 +60,6 @@ NCTEQ15_SETS: Dict[int, str] = {
 }
 BEAM_PDF_SET = NCTEQ15_SETS[1]
 
-# The archived scans' settings, kept (see generation/madgraph.py).
-PAIR_MASS_MIN_GEV = 2.0
-ALPHA = C.ALPHA_EM_DY
-
 _ISOSPIN = {1: 2, 2: 1, -1: -2, -2: -1}   # bound proton -> bound neutron
 
 
@@ -129,10 +125,10 @@ def detector_acceptance(m_chi: float, energy_gev: float, beam: PDF, target: PDF,
     if det.type == "cylindrical" and not det.offaxis_mrad:
         theta = geometry.cylindrical_theta_cut(det.radius_m, det.distance_m)
         return acceptance_per_chi(m_chi, energy_gev, beam, target, theta,
-                                  m_pair_min=PAIR_MASS_MIN_GEV)
+                                  m_pair_min=C.DY_PAIR_MASS_MIN_GEV)
     return acceptance_per_chi(m_chi, energy_gev, beam, target,
                               hit_fraction=lambda r: geometry.hit_fraction(det, r),
-                              distance_m=det.distance_m, m_pair_min=PAIR_MASS_MIN_GEV)
+                              distance_m=det.distance_m, m_pair_min=C.DY_PAIR_MASS_MIN_GEV)
 
 
 def compute_table(material: str, energy_gev: float, masses: Iterable[float], pdfdir: str,
@@ -145,8 +141,8 @@ def compute_table(material: str, energy_gev: float, masses: Iterable[float], pdf
     m = np.asarray(sorted(masses), dtype=float)
     m = m[2.0 * m < math.sqrt(s)]
     beam, target = nucleon_pdf(1, 1, pdfdir), nucleon_pdf(A, Z, pdfdir)
-    sigma = np.array([sigma_hadronic_pb(mi, s, beam, target, m_pair_min=PAIR_MASS_MIN_GEV,
-                                        alpha=ALPHA) for mi in m])
+    sigma = np.array([sigma_hadronic_pb(mi, s, beam, target, alpha=C.ALPHA_EM_DY,
+                                        m_pair_min=C.DY_PAIR_MASS_MIN_GEV) for mi in m])
     if not np.all(np.isfinite(sigma)):
         raise RuntimeError(f"non-finite Drell-Yan cross section for {material} at {energy_gev} GeV.")
     # Right at the kinematic limit the PDF grids' interpolation undershoots
@@ -159,7 +155,8 @@ def compute_table(material: str, energy_gev: float, masses: Iterable[float], pdf
         "material": material, "A": str(A), "Z": str(Z),
         "beam_energy_gev": f"{energy_gev:g}", "sqrt_s_gev": f"{math.sqrt(s):.4f}",
         "process": "LO q q~ > chi chi~ / z (q = u d s c), mu_F = mu_R = M(chi chi~), "
-                   f"M(chi chi~) >= {PAIR_MASS_MIN_GEV:g} GeV, alpha = 1/{1 / ALPHA:g}",
+                   f"M(chi chi~) >= {C.DY_PAIR_MASS_MIN_GEV:g} GeV, "
+                   f"alpha = 1/{1 / C.ALPHA_EM_DY:g}",
         "beam_pdf": f"{BEAM_PDF_SET} (free proton)",
         "target_pdf": f"({Z} f^p/A + {A - Z} f^n/A) / {A}, f^p/A = {sets}",
         "acc": "LO per-chi acceptance of acc_detector (pair at zero pT), with these PDFs",
