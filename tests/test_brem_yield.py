@@ -124,20 +124,24 @@ def test_face_max_theta():
     assert 1e3 * face_max_theta(ship) == pytest.approx(5.0, rel=1e-4)
 
 
-def _brem_warnings(cfg, grids):
+def _brem_run(cfg, grids):
     from dataclasses import replace
     from mcpsim.model import compute_production
     masses = grids.parent / "masses.txt"
     np.savetxt(masses, [0.01, 0.1])
-    cfg = replace(cfg, channels=["brem"],
-                  data=replace(cfg.data, brem_dir=str(grids), mass_grid=str(masses)))
-    return [w for w in compute_production(cfg).warnings if "not accurate above" in w]
+    return compute_production(replace(cfg, channels=["brem"], data=replace(
+        cfg.data, brem_dir=str(grids), mass_grid=str(masses))))
+
+
+def _brem_warnings(cfg, grids):
+    return [w for w in _brem_run(cfg, grids).warnings if "not accurate above" in w]
 
 
 def test_brem_validity_angle_warning(iron_brem_dir):
     """Grids resolve the generating face only out to its half-width: FLAME
-    past 12.5 mrad is warned (collapse), and so are the corners of the
-    DarkQuest/SHiP 1 x 1 m face; FLAME at 4 mrad and the paper's discs not."""
+    past 12.5 mrad gets no brem (it would collapse), the corners of the
+    DarkQuest/SHiP 1 x 1 m face are warned; FLAME at 4 mrad and the paper's
+    discs neither."""
     from dataclasses import replace
     from mcpsim import load_preset
     flame = load_preset("flame")
@@ -145,7 +149,9 @@ def test_brem_validity_angle_warning(iron_brem_dir):
     assert len(_brem_warnings(far, iron_brem_dir)) == 1
     assert "12.5 mrad" in _brem_warnings(far, iron_brem_dir)[0]
     assert "collapses at low mass" in _brem_warnings(far, iron_brem_dir)[0]
+    assert _brem_run(far, iron_brem_dir).brem_central is None    # left out
     assert _brem_warnings(flame, iron_brem_dir) == []          # 4 mrad default
+    assert _brem_run(flame, iron_brem_dir).brem_central.any()
     for name in ("darkquest", "ship"):
         cfg = load_preset(name)
         w = _brem_warnings(cfg, iron_brem_dir)                  # the face's corners

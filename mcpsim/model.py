@@ -312,6 +312,30 @@ def _add_brem(cfg: Config, grid: np.ndarray, result: ProductionResult) -> None:
     exact_kernel = (det.offaxis_mrad != 0.0
                     or (det.type == "bar_array" and cfg.engine.rules.exact_bar_array_brem))
 
+    # The grids also carry the acceptance of the detector they were generated
+    # for (single track or shared bar on a 1x1 m face at 40 / 100 m, with the
+    # first chi always at azimuth 0, so their theta axis ends at the face's
+    # half-width), so brem through any part of the face beyond that angle is
+    # underestimated: the corners of the 1x1 m face itself, all of a far
+    # off-axis face. An off-axis face past that angle collapses at low mass,
+    # so it gets no brem rather than a wrong one.
+    lim = cfg.data.brem_max_theta_mrad
+    if lim is not None:
+        reach = 1e3 * geometry.face_max_theta(det)
+        if reach > lim * (1 + 1e-6):
+            if det.offaxis_mrad:
+                result.warnings.append(
+                    f"brem is not accurate above {lim:g} mrad: the grids only resolve "
+                    f"the face of the detector they were generated for out to that "
+                    f"angle, and this off-axis detector reaches {reach:.3f} mrad, where "
+                    f"brem collapses at low mass; brem is left out.")
+                return
+            result.warnings.append(
+                f"brem is not accurate above {lim:g} mrad: the grids only resolve "
+                f"the face of the detector they were generated for out to that "
+                f"angle, and this detector reaches {reach:.3f} mrad, so brem through "
+                f"the face beyond that angle is missing (underestimated).")
+
     bands = {}
     for idx in (0, 1, 2):
         if exact_kernel:
@@ -328,23 +352,6 @@ def _add_brem(cfg: Config, grid: np.ndarray, result: ProductionResult) -> None:
                 lambda_idx=idx,
             )
         bands[idx] = brem_mod.interp_to_grid(m, y, grid)
-
-    # The grids also carry the acceptance of the detector they were generated
-    # for (single track or shared bar on a 1x1 m face at 40 / 100 m, with the
-    # first chi always at azimuth 0, so their theta axis ends at the face's
-    # half-width), so brem through any part of the face beyond that angle is
-    # underestimated: the corners of the 1x1 m face itself, all of a far
-    # off-axis face.
-    lim = cfg.data.brem_max_theta_mrad
-    if lim is not None:
-        reach = 1e3 * geometry.face_max_theta(det)
-        if reach > lim * (1 + 1e-6):
-            where = ("brem is underestimated (it collapses at low mass)" if det.offaxis_mrad
-                     else "brem through the face beyond that angle is missing (underestimated)")
-            result.warnings.append(
-                f"brem is not accurate above {lim:g} mrad: the grids only resolve "
-                f"the face of the detector they were generated for out to that "
-                f"angle, and this detector reaches {reach:.3f} mrad, so {where}.")
 
     # The grids carry sigma_pA of the nucleus they were generated for; the brem
     # readers rescale to this target. Say so, since it moves brem by up to x3.
