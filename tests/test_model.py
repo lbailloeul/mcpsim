@@ -26,14 +26,14 @@ def test_collider_mode_disables_brem_and_dy(mini_config):
 
 
 def test_upsilon_skipped_for_unknown_family(mini_config):
-    cfg = replace(mini_config, family="custom")
+    cfg = replace(mini_config, family="flame")
     result = compute_production(cfg)
     assert "upsilon" not in result.meson_channels
     assert any("upsilon" in w for w in result.warnings)
 
 
 def test_upsilon_data_override(mini_config):
-    cfg = replace(mini_config, family="custom",
+    cfg = replace(mini_config, family="flame",
                   data=replace(mini_config.data, upsilon_ageo=1e-4))
     result = compute_production(cfg)
     assert "upsilon" in result.meson_channels
@@ -84,11 +84,10 @@ def test_config_notes_reach_warnings(mini_config):
     assert "synthetic note" in result.warnings
 
 
-@pytest.mark.parametrize("family", ["darkquest", "flame"])
-def test_upsilon_borrow_is_reported(mini_config, family):
-    # the upsilon is included on the J/psi's acceptance, and the run says so
-    # rather than only when the channel is skipped
-    result = compute_production(replace(mini_config, family=family))
+def test_upsilon_borrow_is_reported(mini_config):
+    # darkquest family: the upsilon is included on the J/psi's acceptance, and
+    # the run says so rather than only when the channel is skipped.
+    result = compute_production(mini_config)
     assert "upsilon" in result.meson_channels
     assert any("upsilon has no acceptance scan" in w for w in result.warnings)
 

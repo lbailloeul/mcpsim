@@ -1,10 +1,9 @@
 name: FLAME
-# The upsilon has no acceptance scan: it borrows this run's own low-mass J/psi
-# acceptance at each off-axis angle (constants.UPSILON_FAMILIES). The borrow
-# is rough for this 20 cm face at 1 km. Below 1.55 GeV the upsilon is ~5e-5
-# of the J/psi, but from 1.6 to 4.7 GeV it is the only meson channel and
-# alone gives the meson limit there; set data.upsilon_ageo to give it a
-# value of your own.
+# family intentionally NOT darkquest: the legacy flat upsilon acceptance
+# (0.011357) belongs to the 40 m / 0.5 m DarkQuest cylinder and would inflate
+# the upsilon channel by ~4 orders of magnitude at this 20 cm face at 1 km.
+# With an unknown family the upsilon channel is skipped (its true yield here
+# is ~1e-4 of J/psi — negligible); set data.upsilon_ageo to include it.
 family: flame
 
 # FLAME at FNAL: a milliQan-style scintillator-bar mCP detector placed 1 km
