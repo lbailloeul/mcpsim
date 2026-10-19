@@ -202,8 +202,8 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
     if "meson_decay" in cfg.channels:
         acc = dict(data.acceptance)
         for name in MESONS:
-            if name == "upsilon":
-                continue  # no archived sample and negligible rate; flat default
+            if name == "upsilon" and not cfg.data.upsilon_sample:
+                continue  # no sample of its own: it borrows (model._upsilon_ageo)
             try:
                 # Preflight BEFORE the (expensive) meson generation: a
                 # 10M-trial PYTHIA run must not precede an "unsupported
@@ -218,8 +218,9 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
                                header="mass_GeV ageo(per-chi hit prob) [pydecay]")
                     acc[name] = str(out)
                 else:
-                    source = mesons.generate(cfg, name, gen_dir / "mesons",
-                                             trials=opts.get("trials", _trials(mass_subset)))
+                    source = (paths.resolve_data(cfg.data.upsilon_sample) if name == "upsilon"
+                              else mesons.generate(cfg, name, gen_dir / "mesons",
+                                                   trials=opts.get("trials", _trials(mass_subset))))
                     acc[name] = str(decay.run_decay_scan(cfg, name, source, grid,
                                                          gen_dir / "decay"))
                 written.append(acc[name])

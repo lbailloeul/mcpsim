@@ -303,6 +303,15 @@ class DataConfig:
     mass_grid: str = "mship_values.txt"
     c_meson: Optional[Dict[str, float]] = None
     upsilon_ageo: Optional[float] = None   # no legacy scan file exists; flat value
+    # A PYTHIA sample of upsilon parents (`mcpsim generate upsilon`): with one,
+    # the upsilon gets its own acceptance like the other mesons, instead of a
+    # flat upsilon_ageo or the J/psi's.
+    upsilon_sample: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if self.upsilon_ageo is not None and self.upsilon_sample:
+            raise ValueError("data.upsilon_ageo and data.upsilon_sample both set the "
+                             "upsilon's acceptance; give one.")
 
 
 @dataclass
@@ -370,7 +379,7 @@ class Config:
         brem/DY paths are irrelevant when those channels are disabled."""
         refs = [self.data.mass_grid]
         if "meson_decay" in self.channels:
-            refs += list(self.data.acceptance.values())
+            refs += list(self.data.acceptance.values()) + [self.data.upsilon_sample]
         if "brem" in self.channels:
             refs.append(self.data.brem_dir)
         if "drell_yan" in self.channels:
