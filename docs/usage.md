@@ -18,7 +18,8 @@ names its base with `preset:`); `--out DIR` (default `mcpsim-output/<tag>/`);
 are rejected); `--engine python|cpp`; `--fidelity corrected|legacy`;
 `--seed N`; `--quick`; `--ngamma N`; `--offaxis a,b,c`; `--target NAME` to
 swap the target material — `iron` (DarkQuest), `molybdenum` (SHiP), `tungsten`,
-`carbon` (graphite), or the aliases `fe`, `mo`, `tzm`, `w`, `c`, `graphite`.
+`carbon` (graphite), or the aliases `fe`, `mo`, `moly`, `tzm`, `w`, `c`,
+`graphite`.
 A swap renames the run (`darkquest_molybdenum/`) so it never overwrites the
 preset's outputs; it moves brem and Drell-Yan only — Drell-Yan reads the
 built-in cross-section table for the new material (meson rates are per POT).
@@ -80,7 +81,7 @@ target:                    # brem (luminosity + sigma_pA rescale of the grids)
                            #   normalisation); per-POT meson rates are
                            #   material-independent. Known names: iron,
                            #   molybdenum, tungsten, carbon (aliases fe, mo,
-                           #   tzm, w, c, graphite), in any case. A section
+                           #   moly, tzm, w, c, graphite), in any case. A section
                            #   without a name keeps the base preset's material
                            #   and changes only the numbers it gives. Unknown
                            #   names REQUIRE the full four parameters (and
@@ -170,8 +171,11 @@ data:                      # fast-mode inputs; bare names resolve inside the
 Strictness: unknown keys at the top level or in any section **raise**, with a
 "did you mean" suggestion (typos do not silently vanish); unknown channel names
 raise; unknown target names raise unless fully specified; unknown explicit
-presets raise. Overriding `detector.bar_length_m` re-derives n_gamma from an
-inherited `sensitivity.scintillator` unless you also give `n_gamma`.
+presets raise; a `detector.type` (in `legacy_detector` too) other than
+`cylindrical` or `bar_array`, and a `beam.frame` other than `fixed_target` or
+`collider`, raise with a suggestion. Overriding `detector.bar_length_m`
+re-derives n_gamma from an inherited `sensitivity.scintillator` unless you also
+give `n_gamma`.
 
 ## Recipes
 

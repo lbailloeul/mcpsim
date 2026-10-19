@@ -21,6 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from .. import geometry  # noqa: E402
 from ..config import Config, run_config  # noqa: E402
 from ..model import ProductionResult  # noqa: E402
 from ..physics.constants import MESONS  # noqa: E402
@@ -170,7 +171,7 @@ def _geometry_line(cfg: Config) -> str:
     if det.type == "cylindrical":
         geo = f"${det.distance_m:g}$ m, ${det.radius_m:g}$ m radius cylindrical detector"
     else:
-        width, height = det.bar_columns * det.bar_size_m, det.bar_rows * det.bar_size_m
+        width, height = geometry.bar_array_dims(det)
         geo = f"${det.distance_m:g}$ m, ${width:g}\\times{height:g}$ m face"
     if det.offaxis_mrad:
         geo += f", ${det.offaxis_mrad:g}$ mrad off axis"

@@ -45,10 +45,7 @@ def acceptance_theta_cut(det: DetectorConfig) -> float:
     """Polar half-angle used to cut the bremsstrahlung (theta, p) grids."""
     if det.type == "cylindrical":
         return cylindrical_theta_cut(det.radius_m, det.distance_m)
-    if det.type == "bar_array":
-        return equivalent_theta_cut(det)
-    raise ValueError(f"unknown detector type {det.type!r} "
-                     f"(valid: 'cylindrical', 'bar_array')")
+    return equivalent_theta_cut(det)
 
 
 def offaxis_offset_m(det: DetectorConfig) -> float:
@@ -60,8 +57,7 @@ def face_max_theta(det: DetectorConfig) -> float:
     """Largest polar angle any point of the face subtends from the target."""
     d = offaxis_offset_m(det)
     if det.type == "bar_array":
-        half_w = 0.5 * det.bar_columns * det.bar_size_m
-        half_h = 0.5 * det.bar_rows * det.bar_size_m
+        half_w, half_h = (0.5 * x for x in bar_array_dims(det))
         r_max = np.hypot(d + half_w, half_h)
     else:
         r_max = d + det.radius_m
@@ -91,9 +87,7 @@ def hit_fraction(det: DetectorConfig, r: np.ndarray) -> np.ndarray:
     if det.type == "bar_array":
         half_w, half_h = (0.5 * x for x in bar_array_dims(det))
         return face_hit_fraction(r, d, half_w, half_h)
-    if det.type == "cylindrical":
-        return circle_hit_fraction(r, d, det.radius_m)
-    raise ValueError(f"unknown detector type {det.type!r}")
+    return circle_hit_fraction(r, d, det.radius_m)
 
 
 def circle_hit_fraction(r: np.ndarray, d: float, radius: float) -> np.ndarray:

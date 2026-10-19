@@ -7,6 +7,8 @@ import pytest
 from click.testing import CliRunner
 
 from mcpsim.cli import cli
+from mcpsim.config import TARGET_ALIASES
+from mcpsim.physics.constants import TARGET_MATERIALS
 
 
 @pytest.fixture
@@ -203,6 +205,15 @@ def test_target_typo_suggests(runner):
     r = runner.invoke(cli, ["run", "-p", "darkquest", "--target", "mobelium"])
     assert r.exit_code != 0
     assert "did you mean 'molybdenum'" in r.output
+
+
+def test_run_help_names_every_target_material_and_alias(runner):
+    r = runner.invoke(cli, ["run", "--help"])
+    assert r.exit_code == 0, r.output
+    target_help = r.output.split("--target", 1)[1].split("\n  -", 1)[0]
+    words = set(re.findall(r"\w+", target_help))
+    missing = [n for n in (*TARGET_MATERIALS, *TARGET_ALIASES) if n not in words]
+    assert not missing, target_help
 
 
 def test_compare_overlays_runs_and_writes_their_tables(runner, mini_repo, tmp_path):

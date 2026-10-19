@@ -18,8 +18,10 @@ from typing import List, Optional, Sequence
 import click
 
 from . import paths
-from .config import (Config, list_presets, load_config, load_preset, normalize_channels,
-                     normalize_target, pin_supplied_acceptance, run_config)
+from .config import (TARGET_ALIASES, Config, list_presets, load_config, load_preset,
+                     normalize_channels, normalize_target, pin_supplied_acceptance,
+                     run_config)
+from .physics import constants as C
 
 
 def _resolve(preset: Optional[str], config: Optional[str]) -> Config:
@@ -100,10 +102,10 @@ _engine_opts = [
                  help="Override sensitivity.n_gamma (photoelectrons at eps = 1); "
                       "e.g. compare light-yield assumptions without editing the config."),
     click.option("--target", default=None,
-                 help="Swap the target material: iron (DarkQuest), molybdenum (SHiP), "
-                      "tungsten, carbon (graphite); aliases fe, mo, tzm, w, c, graphite. "
-                      "Changes brem and the Drell-Yan cross sections (per-material "
-                      "tables); meson rates are per POT."),
+                 help=f"Swap the target material: {', '.join(C.TARGET_MATERIALS)}; "
+                      f"aliases {', '.join(TARGET_ALIASES)}. Changes brem and the "
+                      f"Drell-Yan cross sections (per-material tables); meson rates "
+                      f"are per POT."),
 ]
 
 

@@ -111,9 +111,9 @@ def brem_yield_offaxis(directory: str, pattern: str, det, n_pot: float,
 
     Instead of the on-axis cone cut, each (theta, p) bin is weighted by the
     azimuthal fraction of its ring on the z = distance plane that intersects
-    the face (geometry.face_hit_fraction / circle_hit_fraction). The theta
-    grid is coarse (0.045 dex) next to the radial band a small face subtends,
-    so each bin is smeared over its log10-theta width with `n_sub` slices
+    the face (geometry.hit_fraction). The theta grid is coarse (0.045 dex)
+    next to the radial band a small face subtends, so each bin is smeared
+    over its log10-theta width with `n_sub` slices
     (sigma is per-bin; distributed uniformly in log theta). Each grid is
     rescaled to the target's sigma_pA (target_rescale).
     """
@@ -123,7 +123,6 @@ def brem_yield_offaxis(directory: str, pattern: str, det, n_pot: float,
         raise ValueError("lambda_idx must be 0, 1, or 2 (Lambda_p = 1.0/1.5/2.0 GeV)")
 
     L_eff = effective_lumi_pb(n_pot, density_g_cm3, interaction_length_cm, A)
-    d = geometry.offaxis_offset_m(det)
 
     def _weights(log10theta: np.ndarray) -> np.ndarray:
         ult, inv = np.unique(log10theta, return_inverse=True)
@@ -131,12 +130,7 @@ def brem_yield_offaxis(directory: str, pattern: str, det, n_pot: float,
         sub = np.linspace(-half, half, n_sub)
         th = 10.0 ** (ult[:, None] + sub[None, :])
         r = np.where(th < np.pi / 2, det.distance_m * np.tan(th), np.inf)
-        if det.type == "bar_array":
-            half_w = 0.5 * det.bar_columns * det.bar_size_m
-            half_h = 0.5 * det.bar_rows * det.bar_size_m
-            w = geometry.face_hit_fraction(r.ravel(), d, half_w, half_h)
-        else:
-            w = geometry.circle_hit_fraction(r.ravel(), d, det.radius_m)
+        w = geometry.hit_fraction(det, r.ravel())
         return w.reshape(th.shape).mean(axis=1)[inv]
 
     masses, yields = [], []

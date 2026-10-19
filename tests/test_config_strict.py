@@ -6,7 +6,8 @@ import pytest
 import yaml
 
 from mcpsim import load_preset
-from mcpsim.config import Config, DataConfig, load_config, normalize_target
+from mcpsim.config import (BeamConfig, Config, DataConfig, DetectorConfig, load_config,
+                           normalize_target)
 
 
 def _write(tmp_path, text):
@@ -128,6 +129,26 @@ def test_engine_config_validation():
         EngineConfig(decay="fortran")
     with pytest.raises(ValueError, match="engine.fidelity"):
         EngineConfig(fidelity="fast")
+
+
+@pytest.mark.parametrize("section, key, typo, meant, valid", [
+    ("detector", "type", "bar-array", "bar_array", ("cylindrical", "bar_array")),
+    ("beam", "frame", "colider", "collider", ("fixed_target", "collider")),
+], ids=["detector.type", "beam.frame"])
+def test_an_unknown_detector_type_or_beam_frame_raises_at_load(tmp_path, section, key,
+                                                               typo, meant, valid):
+    with pytest.raises(ValueError) as err:
+        _load(tmp_path, {"preset": "darkquest", section: {key: typo}})
+    for part in (f"{section}.{key}", f"'{typo}'", f"did you mean '{meant}'", *valid):
+        assert part in str(err.value)
+
+
+@pytest.mark.parametrize("build", [lambda: DetectorConfig(type="bar-array"),
+                                   lambda: BeamConfig(frame="colider")],
+                         ids=["detector.type", "beam.frame"])
+def test_an_unknown_detector_type_or_beam_frame_cannot_be_built(build):
+    with pytest.raises(ValueError, match="did you mean"):
+        build()
 
 
 def test_scintillator_derives_ngamma(tmp_path):

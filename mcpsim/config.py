@@ -12,7 +12,7 @@ import difflib
 import re
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Sequence
 
 import yaml
 
@@ -36,6 +36,10 @@ TARGET_ALIASES = {"fe": "iron", "mo": "molybdenum", "moly": "molybdenum",
 # Config.acceptance_made_for value of a file the user config names: it is used
 # as it is, whatever detector the run models.
 SUPPLIED_BY_CONFIG = "named by the config"
+# A DetectorConfig or BeamConfig holding any other value cannot be built, so
+# code that branches on detector.type or beam.frame needs no fallback.
+DETECTOR_TYPES = ("cylindrical", "bar_array")
+BEAM_FRAMES = ("fixed_target", "collider")
 
 
 _TARGET_NUMBERS = ("Z", "A", "density_g_cm3", "interaction_length_cm")
@@ -71,6 +75,12 @@ def normalize_target(name: str) -> str:
 def _did_you_mean(word: str, choices: Iterable[str]) -> str:
     close = difflib.get_close_matches(word, list(choices), n=1, cutoff=0.5)
     return f" (did you mean '{close[0]}'?)" if close else ""
+
+
+def _check_choice(field_name: str, value: object, choices: Sequence[str]) -> None:
+    if value not in choices:
+        raise ValueError(f"{field_name} must be {' or '.join(map(repr, choices))}, got "
+                         f"{value!r}{_did_you_mean(str(value), choices)}")
 
 
 def normalize_channels(channels: Iterable[str]) -> List[str]:
@@ -121,6 +131,9 @@ class BeamConfig:
     frame: str = "fixed_target"      # 'fixed_target' | 'collider'
     n_pot: float = 1.0e20
     energy_b_gev: float = 0.0        # second beam energy (collider frame)
+
+    def __post_init__(self) -> None:
+        _check_choice("beam.frame", self.frame, BEAM_FRAMES)
 
     @property
     def is_collider(self) -> bool:
@@ -188,6 +201,9 @@ class DetectorConfig:
                                      # enters n_gamma via sensitivity.scintillator
     face_mode: str = "rectangular"
     offaxis_mrad: float = 0.0        # transverse off-axis angle of the face centre
+
+    def __post_init__(self) -> None:
+        _check_choice("detector.type", self.type, DETECTOR_TYPES)
 
 
 @dataclass
