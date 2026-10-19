@@ -135,10 +135,11 @@ def _apply_engine(cfg: Config, engine, fidelity, seed, quick, ngamma=None,
         cfg = replace(cfg, engine=eng)
     if ngamma is not None:
         cfg = replace(cfg, sensitivity=replace(cfg.sensitivity, n_gamma=ngamma))
-    if cfg.engine.fidelity == "legacy" and "legacy" not in cfg.name.lower():
+    mode = cfg.engine.fidelity
+    if cfg.engine.rules.marked and mode not in cfg.name.lower():
         # own name -> own output directory (darkquest_legacy/), so a legacy run
         # never overwrites the default one, and its plots say what they are
-        cfg = replace(cfg, name=f"{cfg.name} legacy")
+        cfg = replace(cfg, name=f"{cfg.name} {mode}")
     return run_config(cfg)        # legacy on a preset -> the published detector
 
 

@@ -22,7 +22,7 @@ def I2(x: float, y: float) -> float:
 
 
 def _I3_integrand(z: float, x: float, pi_val: float) -> float:
-    # pi_val: the legacy scripts used 3.14 (not np.pi); fidelity='legacy'
+    # pi_val: the legacy scripts used 3.14 (not np.pi); legacy fidelity
     # keeps that for bit-for-bit parity (+0.051% on every Dalitz yield).
     return 2 / (3 * pi_val) * np.sqrt(1 - 4 * x / z) * ((1 - z) ** 3) * (2 * x + z) / (z ** 2)
 
@@ -37,12 +37,12 @@ _vI3 = np.vectorize(I3)
 
 def meson_yield(meson: MesonSpec, masses: np.ndarray, ageo: np.ndarray,
                 n_pot: float, c_meson: float,
-                fidelity: str = "corrected") -> np.ndarray:
+                dalitz_pi: float = np.pi) -> np.ndarray:
     """Baseline mCP yield (N_chi/eps^2) for one meson channel on `masses`.
 
     masses, ageo are aligned arrays (ageo is the geometric acceptance per mass).
-    Yields are zero where 2*m_chi exceeds the meson mass. fidelity='legacy'
-    reproduces the published pipeline's 3.14-instead-of-pi Dalitz constant.
+    Yields are zero where 2*m_chi exceeds the meson mass. dalitz_pi is pi in
+    the Dalitz integral; the published pipeline used 3.14 (legacy fidelity).
     """
     masses = np.asarray(masses, dtype=float)
     ageo = np.asarray(ageo, dtype=float)
@@ -54,9 +54,8 @@ def meson_yield(meson: MesonSpec, masses: np.ndarray, ageo: np.ndarray,
 
     x = masses[open_] ** 2 / meson.mass ** 2
     if meson.channel == "dalitz":
-        pi_val = 3.14 if fidelity == "legacy" else np.pi
         out[open_] = (n_pot * ageo[open_] * 2 * c_meson * meson.branching
-                      * ALPHA_EM * _vI3(x, pi_val))
+                      * ALPHA_EM * _vI3(x, dalitz_pi))
     elif meson.channel == "two_body":
         y = M_ELECTRON ** 2 / meson.mass ** 2
         out[open_] = (n_pot * ageo[open_] * 2 * c_meson * meson.branching

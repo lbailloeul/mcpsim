@@ -159,7 +159,7 @@ def _add_meson_channels(cfg: Config, grid: np.ndarray, result: ProductionResult)
 
         computed[name] = ageo
         result.meson_channels[name] = meson_decay.meson_yield(
-            spec, grid, ageo, cfg.beam.n_pot, c, fidelity=cfg.engine.fidelity
+            spec, grid, ageo, cfg.beam.n_pot, c, dalitz_pi=cfg.engine.rules.dalitz_pi
         )
 
 
@@ -301,13 +301,12 @@ def _add_brem(cfg: Config, grid: np.ndarray, result: ProductionResult) -> None:
     brem_dir = paths.resolve_data(cfg.data.brem_dir)
     t = cfg.target
 
-    # Off-axis faces (and bar arrays under corrected fidelity) use the exact
-    # azimuthal kernel; the on-axis cone cut / equal-area approximation stays
-    # as the legacy-parity path.
+    # Off-axis faces (and on-axis bar arrays, unless the fidelity keeps the
+    # cone) use the exact azimuthal kernel; the on-axis cone cut / equal-area
+    # approximation stays as the legacy-parity path.
     det = cfg.detector
     exact_kernel = (det.offaxis_mrad != 0.0
-                    or (det.type == "bar_array"
-                        and cfg.engine.fidelity == "corrected"))
+                    or (det.type == "bar_array" and cfg.engine.rules.exact_bar_array_brem))
 
     bands = {}
     for idx in (0, 1, 2):
@@ -381,7 +380,7 @@ def drell_yan_table(cfg: Config) -> Optional[Path]:
     beam energy (paths.DY_TABLES_DIR). fidelity = legacy keeps the paper's
     MadGraph scan (data.dy_cross, iron nPDF for both beams), and so does an
     explicit data.dy_cross in a user config."""
-    if cfg.engine.fidelity == "legacy" or not cfg.dy_cross_is_preset:
+    if cfg.engine.rules.dy_as_published or not cfg.dy_cross_is_preset:
         return None
     return drellyan.find_table(paths.DY_TABLES_DIR, cfg.beam.energy_gev, cfg.target.name)
 
@@ -391,7 +390,7 @@ def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> N
     # sigma_inel/A. The published pipeline used the iron value (13 mb) for
     # every target; legacy fidelity keeps it.
     t = cfg.target
-    sigma_mb = (C.SIGMA_PN_INELASTIC_MB if cfg.engine.fidelity == "legacy" else
+    sigma_mb = (C.SIGMA_PN_INELASTIC_MB if cfg.engine.rules.dy_as_published else
                 drellyan.sigma_inel_per_nucleon_mb(t.density_g_cm3, t.interaction_length_cm))
     table = drell_yan_table(cfg)
     if table is not None:
@@ -431,7 +430,7 @@ def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> N
 def _check_dy_scan(cfg: Config, cross: str, ageo: str, result: ProductionResult) -> None:
     """Caveats of a MadGraph scan (data.dy_cross) used in place of a table."""
     t, mat = cfg.target, cfg.data.dy_material
-    if cfg.engine.fidelity != "legacy" and cfg.dy_cross_is_preset:
+    if not cfg.engine.rules.dy_as_published and cfg.dy_cross_is_preset:
         result.warnings.append(
             f"no built-in Drell-Yan table for target '{t.name}' at "
             f"{cfg.beam.energy_gev:g} GeV; using the scan {cfg.data.dy_cross}. "
@@ -441,7 +440,7 @@ def _check_dy_scan(cfg: Config, cross: str, ageo: str, result: ProductionResult)
             f"the Drell-Yan cross sections do not declare the material their "
             f"nuclear PDFs were simulated for (data.dy_material); they are "
             f"applied to target '{t.name}' as they are.")
-    elif mat != t.name and cfg.engine.fidelity == "legacy":
+    elif mat != t.name and cfg.engine.rules.dy_as_published:
         result.warnings.append(
             f"Drell-Yan uses the paper's scan, simulated with {mat} nuclear PDFs, "
             f"and the 13 mb normalisation for target '{t.name}' (fidelity legacy, "

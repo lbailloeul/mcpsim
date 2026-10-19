@@ -25,7 +25,7 @@ from typing import List, Optional
 import numpy as np
 
 from .. import paths
-from ..config import Config, DetectorConfig, EngineConfig
+from ..config import FIDELITY_RULES, Config, DetectorConfig, EngineConfig
 from ..generation import pydecay, samples
 from ..generation.common import compile_cpp
 from ..physics.constants import MESONS
@@ -91,7 +91,7 @@ def test_2body(quick: bool = False, verbose: bool = True) -> List[ParityRow]:
 
         # cone theta <= cut is a radius cut on any projection plane
         r_cut = 1000.0 * np.tan(theta_cut)
-        r1, r2, nk = pydecay.decay_to_radii(spec, m, P, rng, 1000.0, "corrected")
+        r1, r2, nk = pydecay.decay_to_radii(spec, m, P, rng, 1000.0)
         p_hits = int((np.nan_to_num(r1, nan=np.inf) <= r_cut).sum()
                      + (np.nan_to_num(r2, nan=np.inf) <= r_cut).sum())
         p_eff, p_err = p_hits / (2 * nk), _eff_err(p_hits, 2 * nk)
@@ -142,7 +142,7 @@ def _side_plane_hits(P, m, fidelity, rng) -> int:
     bV = (PI0_MOTHER ** 2 - s) / (2 * PI0_MOTHER) / E_V
     gV = E_V / np.sqrt(s)
 
-    if fidelity == "legacy":
+    if FIDELITY_RULES[fidelity].cpp_dalitz_sampler:
         cx = pstar * sr * np.cos(phr)
         cy = pstar * sr * np.sin(phr)
         cz = pstar * u

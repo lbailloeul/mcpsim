@@ -97,7 +97,7 @@ def sample_costheta_rel(rng: np.random.Generator, xi: np.ndarray) -> np.ndarray:
 
 
 def decay_to_radii(spec: MesonSpec, mchi: float, P, rng: np.random.Generator,
-                   distance_m: float, fidelity: str = "corrected"
+                   distance_m: float, cpp_sampler: bool = False
                    ) -> Tuple[np.ndarray, np.ndarray, int]:
     """Decay parent 4-momenta P = (px,py,pz,E) -> landing radii of both chis
     on the z = distance_m plane. Returns (r1, r2, n_kept); radii are NaN for
@@ -105,7 +105,8 @@ def decay_to_radii(spec: MesonSpec, mchi: float, P, rng: np.random.Generator,
 
     Two-body channels use the per-event Breit-Wigner mother mass and drop
     sub-threshold parents from numerator AND denominator, matching
-    decayVectorMeson.cc (identical in both fidelity modes)."""
+    decayVectorMeson.cc (identical in both fidelity modes). cpp_sampler
+    replays the C++ Dalitz kinematics (legacy fidelity)."""
     px, py, pz, E = P
     n = px.size
     M = spec.mass
@@ -123,7 +124,7 @@ def decay_to_radii(spec: MesonSpec, mchi: float, P, rng: np.random.Generator,
         bV = q / E_V
         gV = E_V / np.sqrt(s)
 
-        if fidelity == "legacy":
+        if cpp_sampler:
             # C++ 'dalitz' branch: chi about the z-axis, tilted boost,
             # theta_V flat in [0, pi] (pole-biased). Kept for parity runs.
             cx = pstar * sr * np.cos(phr)
@@ -206,7 +207,7 @@ def compute_acceptance(cfg: Config, meson: str, grid: np.ndarray, *,
             Pc = tuple(np.tile(a[lo:hi], repeats) for a in parents)
             r1, r2, nk = decay_to_radii(spec, mchi, Pc, rng,
                                         cfg.detector.distance_m,
-                                        cfg.engine.fidelity)
+                                        cfg.engine.rules.cpp_dalitz_sampler)
             n_kept[j] += nk
             f = (np.nan_to_num(geometry.hit_fraction(cfg.detector, r1))
                  + np.nan_to_num(geometry.hit_fraction(cfg.detector, r2)))

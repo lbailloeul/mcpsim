@@ -14,7 +14,7 @@ mcpsim/
   geometry.py       theta cuts + the azimuthal kernels (face/circle_hit_fraction)
   physics/
     constants.py    meson specs, multiplicity tables, materials, DY constants
-    meson_decay.py  I2/I3 + meson_yield (fidelity-aware)
+    meson_decay.py  I2/I3 + meson_yield (dalitz_pi from the fidelity rules)
     brem.py         cone-cut and off-axis grid integration
     drellyan.py     DY yield + row_mismatch
     sensitivity.py  D(eps), charge grid, exclusion_contour (the one solver)
@@ -50,8 +50,10 @@ and `decay._patched_vector_meson_binary`.
   before this package refactored it — they *are* the baseline reference.
   `--fidelity legacy` at preset geometry must reproduce them **bit-for-bit**:
   `pytest -m golden`.
-- Any deliberate physics change goes behind the fidelity switch and gets its
-  delta quantified in the fidelity table in `docs/physics.md`.
+- Any deliberate physics change goes behind the fidelity switch, as a field
+  of `config.FidelityRules` that the code reads from `cfg.engine.rules`, and
+  gets its delta quantified in the fidelity table in `docs/physics.md`. A
+  test fails if code outside `FIDELITY_RULES` compares fidelity names.
 - Engine changes must keep the parity harness within |z| ≤ 3
   (`pytest -m parity`, or `python -m mcpsim.validation.parity --quick`).
   The harness runs as a module (`python -m mcpsim.validation.parity`) rather

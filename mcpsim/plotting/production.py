@@ -179,7 +179,7 @@ def _geometry_line(cfg: Config) -> str:
 
 
 def _description(cfg: Config) -> str:
-    name = cfg.name
-    if cfg.engine.fidelity == "legacy" and "legacy" not in name.lower():
-        name += " (legacy)"
+    name, mode = cfg.name, cfg.engine.fidelity
+    if cfg.engine.rules.marked and mode not in name.lower():
+        name += f" ({mode})"
     return f"{name}\n{_exposure_line(cfg)} $p$ on {cfg.target.name}\n{_geometry_line(cfg)}"

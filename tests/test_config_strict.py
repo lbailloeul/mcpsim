@@ -147,6 +147,19 @@ def test_an_unknown_choice_cannot_be_built(build):
         build()
 
 
+def test_only_the_rules_table_tells_the_fidelity_modes_apart():
+    import re
+    from mcpsim import paths
+    mode = r"[\"'](?:legacy|corrected)[\"']"
+    compares_a_mode = re.compile(rf"[=!]=\s*{mode}|{mode}\s*[=!]=")
+    found = [f"{path.relative_to(paths.PACKAGE_DIR)}:{n}: {line.strip()}"
+             for path in sorted(paths.PACKAGE_DIR.rglob("*.py"))
+             if path.relative_to(paths.PACKAGE_DIR).parts[0] != "legacy"
+             for n, line in enumerate(path.read_text().splitlines(), 1)
+             if compares_a_mode.search(line)]
+    assert found == [], "read cfg.engine.rules instead:\n" + "\n".join(found)
+
+
 def test_scintillator_derives_ngamma(tmp_path):
     p = _write(tmp_path, "name: t\nbeam: {energy_gev: 120.0}\n"
                          "detector: {type: bar_array, bar_length_m: 0.75}\n"

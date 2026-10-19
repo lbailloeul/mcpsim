@@ -9,6 +9,7 @@ detector geometry at a known beam energy.
 from __future__ import annotations
 
 import difflib
+import math
 import re
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -41,7 +42,30 @@ SUPPLIED_BY_CONFIG = "named by the config"
 DETECTOR_TYPES = ("cylindrical", "bar_array")
 BEAM_FRAMES = ("fixed_target", "collider")
 DECAY_ENGINES = ("python", "cpp")
-FIDELITIES = ("corrected", "legacy")
+
+
+@dataclass(frozen=True)
+class FidelityRules:
+    """What a fidelity mode decides, one rule per field. FIDELITY_RULES is the
+    one place the modes are told apart; code reads cfg.engine.rules, and
+    docs/physics.md sizes each difference."""
+    published_detector: bool    # a preset models its legacy_detector (run_config)
+    dalitz_pi: float            # pi in the Dalitz I3 integral (the scripts used 3.14)
+    cpp_dalitz_sampler: bool    # pydecay replays the C++ Dalitz kinematics
+    exact_bar_array_brem: bool  # on-axis bar arrays get the face kernel, not the cone cut
+    dy_as_published: bool       # the paper's Drell-Yan scan, with 13 mb for every target
+    marked: bool                # runs carry the mode's name (the CLI's "<name> legacy")
+
+
+FIDELITY_RULES: Dict[str, FidelityRules] = {
+    "corrected": FidelityRules(published_detector=False, dalitz_pi=math.pi,
+                               cpp_dalitz_sampler=False, exact_bar_array_brem=True,
+                               dy_as_published=False, marked=False),
+    "legacy": FidelityRules(published_detector=True, dalitz_pi=3.14,
+                            cpp_dalitz_sampler=True, exact_bar_array_brem=False,
+                            dy_as_published=True, marked=True),
+}
+FIDELITIES = tuple(FIDELITY_RULES)
 
 
 _TARGET_NUMBERS = ("Z", "A", "density_g_cm3", "interaction_length_cm")
@@ -228,6 +252,10 @@ class EngineConfig:
     def __post_init__(self) -> None:
         _check_choice("engine.decay", self.decay, DECAY_ENGINES)
         _check_choice("engine.fidelity", self.fidelity, FIDELITIES)
+
+    @property
+    def rules(self) -> FidelityRules:
+        return FIDELITY_RULES[self.fidelity]
 
 
 @dataclass
@@ -434,7 +462,7 @@ def run_config(cfg: Config) -> Config:
     records the published detector (legacy_detector) models that detector, so
     the archived acceptance files and the brem cut reproduce the paper; every
     other run models `detector`. Idempotent."""
-    if (cfg.engine.fidelity == "legacy" and cfg.geometry_is_preset
+    if (cfg.engine.rules.published_detector and cfg.geometry_is_preset
             and cfg.legacy_detector is not None):
         return replace(cfg, detector=cfg.legacy_detector)
     return cfg

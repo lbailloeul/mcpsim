@@ -289,8 +289,9 @@ detectors (the run warns).
 | DarkQuest / SHiP detector | the paper's r = 0.5 m disc (`legacy_detector`) and its archived acceptance files | a 1×1 m face (20 × 20 bars of 5 cm, the brem grids' layout); meson acceptance recomputed for it (Python engine, cached), Drell-Yan from the tables | meson acceptance +17–33%; ε 1–3% stronger where mesons dominate; brem unchanged (see the caveats) |
 | Drell-Yan | the paper's scan (iron bound proton for both beams, DarkQuest and SHiP alike) and acceptance file | per-material table (free proton × nucleus) with the LO acceptance of the face | with the rows above: DY ×1.23–1.61 DarkQuest, ×1.30–1.60 SHiP; ε up to 10% / 13% stronger where DY dominates ([above](#drell-yan)) |
 
-`--fidelity legacy` at preset geometry reproduces the frozen golden tables
-bit-for-bit (`pytest -m golden`).
+Each row except the mother-mass one is a field of `config.FIDELITY_RULES`, the
+one place the code tells the two modes apart. `--fidelity legacy` at preset
+geometry reproduces the frozen golden tables bit-for-bit (`pytest -m golden`).
 
 ## Known physics caveats
 
