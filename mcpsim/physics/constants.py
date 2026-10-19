@@ -181,13 +181,16 @@ TARGET_MATERIALS: Dict[str, TargetMaterial] = {
 # the channel is skipped (model._upsilon_ageo).
 #
 # This set gates the channel: a family not listed here has no established basis
-# for the substitution and skips it. FLAME relies on that -- its 1 km bar array
-# is far enough from the DarkQuest/SHiP geometries that the borrow was judged
-# unsound.
+# for the substitution and skips it. FLAME borrows its own J/psi acceptance at
+# each angle. That borrow is rougher for its far off-axis face, which is
+# sensitive to the parents' angular spread. Below the J/psi's 1.55 GeV
+# threshold the upsilon is ~5e-5 of the J/psi; from there to 4.73 GeV it is
+# the only meson channel, so FLAME's meson-only limit there rests on this
+# borrow.
 #
 # What stays unvalidated: the J/psi acceptance is not flat in mass, and its scan
 # stops at m_chi = 1.525 GeV (the J/psi's own kinematic edge) while upsilon
 # decays stay open to m_chi = 4.73 GeV, so past roughly the first third of the
 # upsilon's range the borrowed value covers territory no scan has reached. The
 # channel is worth ~1e-4 of the J/psi yield and has never shifted a limit.
-UPSILON_FAMILIES = frozenset({"darkquest", "ship"})
+UPSILON_FAMILIES = frozenset({"darkquest", "ship", "flame"})
