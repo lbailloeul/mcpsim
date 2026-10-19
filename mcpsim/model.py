@@ -8,9 +8,12 @@ epsilon/detection dependence is applied later in sensitivity.signal_2d.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import hashlib
+import json
+import os
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -406,14 +409,25 @@ def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> N
     table = drell_yan_table(cfg)
     if table is not None:
         tab = drellyan.load_table(table)
-        m, y = drellyan.dy_yield_table(tab, cfg.beam.n_pot, sigma_mb)
         face = geometry.face_signature(cfg.detector)
         if tab.acc_detector != face:
-            result.warnings.append(
-                f"Drell-Yan acceptance is the LO acceptance of the preset's "
-                f"detector ({tab.acc_detector}), not yours ({face}); it is not "
-                f"recomputed for custom or off-axis detectors. Treat this "
-                f"channel as approximate.")
+            # only the rows the interpolation onto the grid reads
+            pos = np.searchsorted(tab.masses, grid)
+            rows = np.unique(np.clip(np.concatenate([pos - 1, pos, pos + 1]),
+                                     0, tab.masses.size - 1))
+            acc, why_not = _lo_dy_acceptance(cfg, tab.masses[rows])
+            if acc is None:
+                result.warnings.append(
+                    f"Drell-Yan acceptance is the LO acceptance of the preset's "
+                    f"detector ({tab.acc_detector}), not yours ({face}); {why_not}. "
+                    f"Treat this channel as approximate.")
+            else:
+                result.warnings.append(
+                    f"Drell-Yan acceptance recomputed at LO for this detector ({face}) "
+                    f"with the table's PDFs; the table's own is for {tab.acc_detector}.")
+                tab = replace(tab, masses=tab.masses[rows], sigma_pb=tab.sigma_pb[rows],
+                              acc=acc)
+        m, y = drellyan.dy_yield_table(tab, cfg.beam.n_pot, sigma_mb)
     else:
         if not (cfg.data.dy_cross and cfg.data.dy_ageo):
             result.warnings.append(
@@ -436,6 +450,40 @@ def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> N
                 f"this channel as approximate.")
     order = np.argsort(m)
     result.drell_yan = np.interp(grid, m[order], y[order], left=0.0, right=0.0)
+
+
+def _lo_dy_acceptance(cfg: Config, masses: np.ndarray) -> Tuple[Optional[np.ndarray], str]:
+    """(LO per-chi Drell-Yan acceptance of cfg.detector at `masses`, "") with
+    the PDFs the built-in tables use, or (None, why not). Computing it needs
+    the nCTEQ15 LHAPDF grids (MCPSIM_PDFSETS) and the parton package; the
+    result is cached under paths.CACHE_DIR, so later runs need neither."""
+    det = cfg.detector
+    key = hashlib.md5(json.dumps({
+        "det": [det.type, det.distance_m, det.radius_m, det.bar_columns, det.bar_rows,
+                det.bar_size_m, det.offaxis_mrad],
+        "target": cfg.target.name, "beam_gev": cfg.beam.energy_gev,
+        "masses": [float(m) for m in masses]}, sort_keys=True).encode()).hexdigest()[:12]
+    cache = paths.CACHE_DIR / "dy_acceptance" / f"acc_{key}.txt"
+    if cache.exists():
+        return np.loadtxt(cache, ndmin=2)[:, 1], ""
+    pdfdir = os.environ.get("MCPSIM_PDFSETS")
+    if not pdfdir:
+        return None, ("to recompute it for this detector, set MCPSIM_PDFSETS to a "
+                      "directory of the nCTEQ15 LHAPDF grids and pip install parton")
+    from .generation import dy_tables
+    mat = C.TARGET_MATERIALS[cfg.target.name]
+    try:
+        beam = dy_tables.nucleon_pdf(1, 1, pdfdir)
+        target = dy_tables.nucleon_pdf(dy_tables.mass_number(mat), mat.Z, pdfdir)
+        acc = np.array([dy_tables.detector_acceptance(float(m), cfg.beam.energy_gev,
+                                                      beam, target, det) for m in masses])
+    except (ImportError, FileNotFoundError) as exc:
+        return None, f"recomputing it for this detector failed ({exc})"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savetxt(cache, np.column_stack([masses, acc]), fmt="%.10g",
+               header=f"mass_GeV acc_per_chi [LO; {geometry.face_signature(det)}; "
+                      f"{cfg.target.name}; {cfg.beam.energy_gev:g} GeV]")
+    return np.loadtxt(cache, ndmin=2)[:, 1], ""     # as stored: every run reads the same
 
 
 def _check_dy_scan(cfg: Config, cross: str, ageo: str, result: ProductionResult) -> None:

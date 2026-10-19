@@ -274,8 +274,12 @@ unzipped directory for exact reruns; the in-repo `models/mcp_ufo` is the
 minimal QED-only recreation with the same χ pdg. See [data.md](data.md) for
 the open provenance items.
 By default the DY acceptance is the tables' LO acceptance of the **preset's
-face**; unlike the meson channels it is not recomputed for custom or off-axis
-detectors (the run warns).
+face**. For a custom or off-axis detector it is recomputed at LO for that
+detector, with the tables' PDFs, when `MCPSIM_PDFSETS` names a directory of
+the nCTEQ15 LHAPDF grids and `parton` is installed; the result is cached, so
+later runs need neither. Without them the run warns and keeps the preset
+face's acceptance, which is orders of magnitude too large for a small far face
+such as FLAME's.
 
 ## Fidelity: corrected vs legacy
 
@@ -315,7 +319,7 @@ prints a `!` line when the caveat applies; the rest are documented only.
 | **Drell-Yan counts one χ per pair**: the acceptance files hold the per-χ hit probability and N_DY has no factor 2, while the meson channels count both χ (2 × per-χ) | counting both would double N_DY (ε up to 8% stronger in the light-yield-limited regime, more where P → 1) | documented — a convention to settle |
 | **Drell-Yan acceptance is LO collinear** (pair pT = 0, as in the MadGraph LO events) | real pairs carry ⟨pT⟩ ~ 1 GeV, comparable to the transverse momentum that already takes a χ out of the 5–12.5 mrad cones; not in the files nor the reweighting (unquantified) | documented |
 | **SHiP's archived Drell-Yan acceptance mixes geometries** (`--fidelity legacy`): a 1 m² face (1×1 m square or equal-area disc) up to 7.04 GeV, the paper's r = 0.5 m disc above 7.4 GeV | 20–28% more acceptance than the disc below 7 GeV; an 11% step in a_geo at 7.0–7.4 GeV; the paper's SHiP ε is ~3% too strong at 1.6–5 GeV if the disc was meant (6.5% at 7 GeV). The default uses the LO acceptance of the 1×1 m face at every mass | documented ([above](#drell-yan)) |
-| **Drell-Yan acceptance is the preset face's** (the tables' LO acceptance) | not recomputed for custom or off-axis detectors | run |
+| **Drell-Yan acceptance of a custom or off-axis detector** | recomputed at LO for that detector when `MCPSIM_PDFSETS` and `parton` are available (cached); otherwise the preset face's, orders of magnitude too large for FLAME | run |
 | **Zero-background threshold** (3.09 events) and borrowed `n_gamma` anchors | see [the detection model](#detection-model-and-the-exclusion-threshold) | documented |
 | **Limit floor** — where the signal already passes threshold at `charge_min`, the tabulated ε is the scan's bottom, not the limit | limit stronger than shown | run |
 

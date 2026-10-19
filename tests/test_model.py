@@ -5,6 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
+from mcpsim import paths
 from mcpsim.model import compute_production
 
 
@@ -92,13 +93,65 @@ def test_upsilon_borrow_is_reported(mini_config, family):
     assert any("upsilon has no acceptance scan" in w for w in result.warnings)
 
 
-def test_drell_yan_custom_geometry_warns(mini_config):
+@pytest.fixture
+def no_pdf_grids(tmp_path, monkeypatch):
+    monkeypatch.delenv("MCPSIM_PDFSETS", raising=False)
+    monkeypatch.setattr(paths, "CACHE_DIR", tmp_path / "cache")
+
+
+@pytest.fixture
+def toy_pdf_grids(tmp_path, monkeypatch):
+    """nCTEQ15 'grids' that depend on A, so the beam and target differ."""
+    from mcpsim.generation import dy_tables
+
+    def grid_pdf(name, pdfdir):
+        scale = float(name.split("_")[1]) ** 0.1
+        return lambda pid, x, q: (scale if pid > 0 else 0.3) * (1 - x) ** (3 if pid > 0 else 7) / x
+    monkeypatch.setattr(dy_tables, "_grid_pdf", grid_pdf)
+    monkeypatch.setenv("MCPSIM_PDFSETS", str(tmp_path / "pdfsets"))
+    monkeypatch.setattr(paths, "CACHE_DIR", tmp_path / "cache")
+
+
+def _flame_drell_yan(tmp_path, offaxis_mrad):
+    from mcpsim import load_preset
+    from mcpsim.physics import drellyan
+    table = drellyan.load_table(drellyan.find_table(paths.DY_TABLES_DIR, 120.0, "carbon"))
+    grid = tmp_path / "masses.txt"
+    np.savetxt(grid, table.masses[[5, 60, 120]], fmt="%.10g")     # table nodes
+    flame = load_preset("flame")
+    return replace(flame, channels=["drell_yan"],
+                   data=replace(flame.data, mass_grid=str(grid)),
+                   detector=replace(flame.detector, offaxis_mrad=offaxis_mrad))
+
+
+def test_an_off_axis_face_gets_its_own_drell_yan_acceptance(tmp_path, toy_pdf_grids,
+                                                            monkeypatch):
+    near = compute_production(_flame_drell_yan(tmp_path, 4.0))
+    far = compute_production(_flame_drell_yan(tmp_path, 14.0))
+    assert any("Drell-Yan acceptance recomputed at LO" in w for w in near.warnings)
+    assert np.all(far.drell_yan < near.drell_yan)            # further off axis, less
+    monkeypatch.delenv("MCPSIM_PDFSETS")
+    monkeypatch.setattr(paths, "CACHE_DIR", tmp_path / "no-cache")
+    tables_face = compute_production(_flame_drell_yan(tmp_path, 4.0))   # 1 x 1 m at 40 m
+    assert np.all(near.drell_yan < 1e-3 * tables_face.drell_yan)
+
+
+def test_a_recomputed_drell_yan_acceptance_is_reused_without_the_grids(tmp_path, toy_pdf_grids,
+                                                                       monkeypatch):
+    first = compute_production(_flame_drell_yan(tmp_path, 9.0)).drell_yan
+    monkeypatch.delenv("MCPSIM_PDFSETS")
+    again = compute_production(_flame_drell_yan(tmp_path, 9.0))
+    np.testing.assert_array_equal(again.drell_yan, first)
+    assert any("Drell-Yan acceptance recomputed at LO" in w for w in again.warnings)
+
+
+def test_drell_yan_custom_geometry_warns(mini_config, no_pdf_grids):
     from mcpsim import load_preset
     # the tables carry the preset's 1 x 1 m face: another detector is warned
     result = compute_production(mini_config)                 # r = 0.5 m disc
     assert result.drell_yan is not None
     assert any("LO acceptance of the preset's detector (1 x 1 m face at 40 m)" in w
-               for w in result.warnings)
+               and "MCPSIM_PDFSETS" in w for w in result.warnings)
     face = replace(mini_config, detector=load_preset("darkquest").detector)
     assert not any("acceptance" in w and "Drell-Yan" in w
                    for w in compute_production(face).warnings)

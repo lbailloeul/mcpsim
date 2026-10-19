@@ -96,6 +96,11 @@ a scan of your conda envs for ones that carry them.
   `AlphaS_NumFlavors: 5`. The UFO model is the in-repo `models/mcp_ufo`
   unless `MCPSIM_MCP_MODEL` names another. On LXPLUS use `--condor`; the
   bundle's `README_condor.txt` covers the workers.
+- **Drell-Yan acceptance for custom or off-axis detectors** (e.g. FLAME):
+  `pip install parton` and set `MCPSIM_PDFSETS` to a directory holding the
+  nCTEQ15 LHAPDF grids (nCTEQ15_1_1 plus the target's set, e.g. nCTEQ15_12_6
+  for carbon); on LXPLUS `$(lhapdf-config --datadir)` in an LCG view. The
+  acceptance is computed once per detector and cached.
 
 ## Troubleshooting
 
