@@ -47,6 +47,27 @@ def test_figures_write_pdf_and_png(mini_config, tmp_path):
         assert p.exists() and p.with_suffix(".png").exists(), p
 
 
+def test_both_plots_name_a_run_the_same_way(mini_config, monkeypatch, tmp_path):
+    import matplotlib.pyplot as plt
+    from mcpsim.model import compute_production
+    from mcpsim.plotting import limits, production
+    figures = []
+    for module in (limits, production):
+        monkeypatch.setattr(module, "save", lambda fig, output: figures.append(fig) or output)
+    legacy = replace(mini_config, engine=replace(mini_config.engine, fidelity="legacy"))
+    for cfg, shown in ((mini_config, "mini"), (legacy, "mini (legacy)"),
+                       (replace(legacy, name="mini legacy"), "mini legacy")):   # the CLI's name
+        figures.clear()
+        res = compute_production(cfg)
+        production.plot_production(res, tmp_path / "production.pdf")
+        limits.plot_limit(res, tmp_path / "limit.pdf")
+        title = figures[0].axes[0].get_legend().get_title().get_text()
+        labels = [t.get_text() for t in figures[1].axes[0].get_legend().get_texts()]
+        plt.close("all")
+        assert title.splitlines()[0] == shown
+        assert labels and all(label.startswith(f"{shown}: ") for label in labels), labels
+
+
 def test_limit_curves_without_brem(mini_config):
     from mcpsim.model import compute_production
     from mcpsim.plotting.limits import limit_curves

@@ -180,7 +180,5 @@ def _geometry_line(cfg: Config) -> str:
 
 
 def _description(cfg: Config) -> str:
-    name, mode = cfg.name, cfg.engine.fidelity
-    if cfg.engine.rules.marked and mode not in name.lower():
-        name += f" ({mode})"
-    return f"{name}\n{_exposure_line(cfg)} $p$ on {cfg.target.name}\n{_geometry_line(cfg)}"
+    return (f"{cfg.display_name}\n{_exposure_line(cfg)} $p$ on {cfg.target.name}\n"
+            f"{_geometry_line(cfg)}")

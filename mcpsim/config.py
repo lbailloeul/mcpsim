@@ -350,6 +350,16 @@ class Config:
         return re.sub(r"\W+", "_", self.name.strip().lower()) or "experiment"
 
     @property
+    def display_name(self) -> str:
+        """The name every plot shows: a run of a marked fidelity says so, as
+        "<name> (legacy)", unless its name already does (the CLI names a
+        legacy run "<name> legacy")."""
+        mode = self.engine.fidelity
+        if self.engine.rules.marked and mode not in self.name.lower():
+            return f"{self.name} ({mode})"
+        return self.name
+
+    @property
     def needs_source_repo(self) -> bool:
         """True when any fast-mode data reference is repo-relative.
 

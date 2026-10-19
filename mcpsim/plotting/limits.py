@@ -67,7 +67,7 @@ def plot_limit_compare(results: Sequence[ProductionResult], output: str | Path) 
             cfg = result.config
             solid, light = family_colors(cfg.family, used)
             eps, eps_no_brem = limit_curves(result)
-            label = f"{cfg.name}: {pot_tex(cfg.beam.n_pot)} POT"
+            label = f"{cfg.display_name}: {pot_tex(cfg.beam.n_pot)} POT"
             if eps_no_brem is not None:
                 _curve(ax, result.masses, eps_no_brem, light, 1.8, (0, (4, 2.5)),
                        f"{label}, without $p$ brem")

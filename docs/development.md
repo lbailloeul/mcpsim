@@ -5,9 +5,11 @@
 ```
 mcpsim/
   cli.py            click commands; clean-error wrapping; engine/offaxis flags
-  config.py         dataclasses + YAML overlay (strict); presets; Config.tag/notes
+  config.py         dataclasses + YAML overlay (strict); presets; Config.tag/notes/
+                    display_name; FIDELITY_RULES (every legacy difference)
   paths.py          source-repo resolution (MCPSIM_SOURCE_REPO / source_repo / sibling)
-  model.py          fast-mode compute core -> ProductionResult; geometry-honest
+  model.py          fast-mode compute core -> ProductionResult (carrying the config
+                    it modelled, which tables and plots read); geometry-honest
                     acceptance dispatch (_meson_ageo)
   pipeline.py       run orchestration; regenerate_inputs (warning-returning);
                     write_tables (the golden-table format)
