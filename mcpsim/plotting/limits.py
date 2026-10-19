@@ -44,15 +44,10 @@ Y_TOP = 2.0
 
 def limit_curves(cfg: Config, result: ProductionResult):
     """(eps with all channels, eps without proton brem or None) on the mass grid."""
-    s = cfg.sensitivity
-    charges = sensitivity.charge_grid(s.charge_min, s.charge_max, s.n_charge)
-
-    def eps(total):
-        return sensitivity.exclusion_contour(total, charges, s.n_gamma, s.a, s.n_chi_threshold)
-    brem = result.brem_central
-    no_brem = (eps(result.total - brem)
+    s, brem = cfg.sensitivity, result.brem_central
+    no_brem = (sensitivity.exclusion_contour(result.total - brem, s)
                if brem is not None and brem.sum() > 0 else None)
-    return eps(result.total), no_brem
+    return sensitivity.exclusion_contour(result.total, s), no_brem
 
 
 def plot_limit(cfg: Config, result: ProductionResult, output: str | Path) -> Path:

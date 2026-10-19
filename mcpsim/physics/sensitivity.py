@@ -32,36 +32,40 @@ def signal_2d(baseline_1d: np.ndarray, charges: np.ndarray,
     return det[:, None] * baseline_1d[None, :]
 
 
-def charge_grid(charge_min: float, charge_max: float, n_charge: int) -> np.ndarray:
-    """Log-spaced epsilon scan grid (strictly increasing, validated).
+def charge_grid(s) -> np.ndarray:
+    """The log-spaced epsilon scan grid of `s`, a config.SensitivityConfig
+    (strictly increasing, validated).
 
     A swapped min/max would make exclusion_contour silently return the
     LARGEST charge at every mass — validate instead."""
-    if not (0 < charge_min < charge_max):
+    if not (0 < s.charge_min < s.charge_max):
         raise ValueError(
             f"sensitivity charge grid needs 0 < charge_min < charge_max, got "
-            f"charge_min={charge_min!r}, charge_max={charge_max!r}"
+            f"charge_min={s.charge_min!r}, charge_max={s.charge_max!r}"
         )
-    if n_charge < 2:
-        raise ValueError(f"n_charge must be >= 2, got {n_charge}")
-    return np.logspace(np.log10(charge_min), np.log10(charge_max), n_charge)
+    if s.n_charge < 2:
+        raise ValueError(f"n_charge must be >= 2, got {s.n_charge}")
+    return np.logspace(np.log10(s.charge_min), np.log10(s.charge_max), s.n_charge)
 
 
-def exclusion_contour(baseline_1d: np.ndarray, charges: np.ndarray,
-                      n_gamma: float, a: float, threshold: float) -> np.ndarray:
-    """Smallest epsilon at which the signal reaches `threshold`, per mass.
+def exclusion_contour(baseline_1d: np.ndarray, s) -> np.ndarray:
+    """Smallest epsilon at which the signal reaches s.n_chi_threshold, per
+    mass, for the detection model and charge_grid scan of `s`, a
+    config.SensitivityConfig.
 
     The signal N_chi(eps, m) = D(eps) * baseline(m) is monotone increasing in
     eps, so the exclusion region is eps > eps95(m). The crossing is found per
     mass column and refined by log-log interpolation between the bracketing
     grid points. Masses where the signal never reaches the threshold (or where
-    already the smallest eps exceeds it) get NaN / charges[0] respectively.
+    already the smallest eps exceeds it) get NaN / charge_grid(s)[0]
+    respectively.
 
     This is the single contour solver shared by the limit plot and the
-    text-table outputs (and previously duplicated in scripts/flame_offaxis.py).
+    text-table outputs.
     """
+    charges, threshold = charge_grid(s), s.n_chi_threshold
     baseline_1d = np.asarray(baseline_1d, dtype=float)
-    signal = signal_2d(baseline_1d, charges, n_gamma, a)     # (n_eps, n_mass)
+    signal = signal_2d(baseline_1d, charges, s.n_gamma, s.a)     # (n_eps, n_mass)
     lim = np.full(baseline_1d.size, np.nan)
     for j in range(baseline_1d.size):
         above = np.flatnonzero(signal[:, j] >= threshold)

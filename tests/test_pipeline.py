@@ -187,6 +187,18 @@ def test_limit_floor_warning_and_run_record(mini_config, tmp_path):
     assert rec["drell_yan_cross_sections"].endswith("dy_sigma_iron_120GeV.txt")
 
 
+def test_the_limit_table_and_the_limit_plot_show_the_same_limit(mini_config, tmp_path):
+    from mcpsim.model import compute_production
+    from mcpsim.pipeline import write_tables
+    from mcpsim.plotting.limits import limit_curves
+    sens = replace(mini_config.sensitivity, n_chi_threshold=10.0, n_charge=50)
+    for cfg in (mini_config, replace(mini_config, sensitivity=sens)):
+        result = compute_production(cfg)
+        write_tables(cfg, result, tmp_path)
+        table = np.loadtxt(tmp_path / f"limit_{cfg.tag}.txt")
+        np.testing.assert_allclose(table[:, 1], limit_curves(cfg, result)[0], rtol=1e-7)
+
+
 def test_limit_curve_file_for_collaborators(mini_config, tmp_path):
     from mcpsim.model import compute_production
     from mcpsim.pipeline import write_tables

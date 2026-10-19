@@ -86,23 +86,22 @@ def write_tables(cfg: Config, result: ProductionResult, out_dir: Path) -> List[P
                f"{cfg.beam.n_pot:g} POT]")
 
     s = cfg.sensitivity
-    charges = sensitivity.charge_grid(s.charge_min, s.charge_max, s.n_charge)
-    eps95 = sensitivity.exclusion_contour(result.total, charges, s.n_gamma, s.a,
-                                          s.n_chi_threshold)
+    eps95 = sensitivity.exclusion_contour(result.total, s)
+    floor = sensitivity.charge_grid(s)[0]
     lim_path = out_dir / f"limit_{tag}.txt"
     np.savetxt(lim_path, np.column_stack([result.masses, eps95]), fmt="%.8g",
                header=f"mass_GeV eps_at_{s.n_chi_threshold}_events "
                f"[D(eps)=(1-exp(-{s.n_gamma:g} eps^2))^{s.a:g} eps^2]")
     # exclusion_contour returns charge_min where the signal already passes the
     # threshold at the bottom of the scan; that is a floor, not a limit.
-    clipped = int(np.sum(eps95 == charges[0]))
+    clipped = int(np.sum(eps95 == floor))
     if clipped:
         msg = (f"the limit hits the bottom of the charge scan (charge_min = "
                f"{s.charge_min:g}) at {clipped} mass point(s): the true limit is "
                f"stronger there. Lower sensitivity.charge_min.")
         if msg not in result.warnings:
             result.warnings.append(msg)
-    curve_path = write_limit_curve(cfg, result.masses, eps95, charges[0], out_dir)
+    curve_path = write_limit_curve(cfg, result.masses, eps95, floor, out_dir)
     return [prod_path, lim_path, curve_path, write_run_record(cfg, out_dir)]
 
 
