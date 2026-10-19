@@ -117,7 +117,10 @@ def test_condor_bundle(tmp_path):
     assert "set +u" in wrapper and "--form-factor-mode full" in wrapper
     assert "brem_venv/bin/python" in wrapper and "Missing Python modules" in wrapper
     assert "queue 3" in (tmp_path / "brem.sub").read_text()
-    assert "condor_submit brem.sub" in (tmp_path / "README_condor.txt").read_text()
+    readme = (tmp_path / "README_condor.txt").read_text()
+    assert "condor_submit brem.sub" in readme
+    # the jobs run brem_venv without the LCG view's PYTHONPATH, so it is filled without it
+    assert "env -u PYTHONPATH brem_venv/bin/pip install" in readme
     np.testing.assert_allclose(np.loadtxt(tmp_path / "brem_masses.txt"), [0.001, 0.05, 0.2])
 
 

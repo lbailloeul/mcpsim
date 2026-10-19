@@ -380,11 +380,12 @@ def prepare_condor_dy(cfg: Config, masses: np.ndarray, work_dir: Path, *,
                   "   MG5_DIR (see above) to your MadGraph directory."),
         python_step=(f"The jobs import mcpsim from the checkout that wrote\n"
                      f"   this bundle, {src},\n   so the LCG view's python3 "
-                     f"(numpy, PyYAML) is enough. A venv also works:\n"
-                     f"     python3 -m venv dy_venv && dy_venv/bin/pip install -e {src}"
+                     f"(numpy, PyYAML) is enough. A venv also works; the jobs run it\n"
+                     f"   with -E, so install with the view's PYTHONPATH unset:\n"
+                     f"     python3 -m venv dy_venv && env -u PYTHONPATH dy_venv/bin/pip install -e {src}"
                      if src else
                      f"Make a venv with mcpsim {__version__} (once):\n"
-                     f"     python3 -m venv dy_venv && dy_venv/bin/pip install <your mcpsim source>\n"
+                     f"     python3 -m venv dy_venv && env -u PYTHONPATH dy_venv/bin/pip install <your mcpsim source>\n"
                      f"   or set PYTHON_BIN to a Python that has it.")))
 
     batch.submit(work_dir, submit, f"the last to finish writes {dy_cross.name} and "

@@ -118,9 +118,13 @@ mcpsim brem bundle: {n_masses} jobs, one per mass in brem_masses.txt, for
 (AFS/EOS) on lxplus.cern.ch; the jobs cd to {workdir}
 (override with BREM_WORKDIR if you move the bundle).
 
-1. Python with mpi4py, numpy and vegas (once):
+1. Python with mpi4py, numpy and vegas (once). The jobs run this venv
+   without the view's PYTHONPATH, so install with it unset (else pip
+   counts the view's numpy and mpi4py as installed), and build mpi4py
+   against the view's OpenMPI, the one the jobs' mpirun is:
      source {lcg_view}
-     python3 -m venv brem_venv && brem_venv/bin/pip install mpi4py numpy vegas
+     python3 -m venv brem_venv
+     env -u PYTHONPATH brem_venv/bin/pip install --no-binary mpi4py mpi4py numpy vegas
    (or use another Python: environment = "PYTHON_BIN=/path/to/python" in
    brem.sub; Condor jobs do not see your shell's environment)
 
