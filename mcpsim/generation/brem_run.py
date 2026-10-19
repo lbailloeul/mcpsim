@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import math
 import re
-import shutil
 from pathlib import Path
 from typing import List, Tuple
 
@@ -30,7 +29,7 @@ import numpy as np
 from .. import paths
 from ..config import Config
 from ..physics.dy_lo import fixed_target_s
-from . import common
+from . import common, condor
 
 
 # The canonical grids (DarkQuest-/SHiP-brem-backup) are the eVMD "full" mode,
@@ -67,33 +66,16 @@ def regenerate_brem(cfg: Config, masses: np.ndarray, work_dir: Path, *,
 
 
 # Per-job wrapper run by each Condor process. Follows the proven
-# archived/condor-brem-mcp-production/run_lxplus_brem.sh: cd to the bundle on
-# the shared filesystem (AFS/EOS) by absolute path (a worker runs the
-# executable from its own scratch copy), source a CERN LCG view for
-# OpenMPI with `set -u` off (its setup scripts read unset variables), then
-# run a venv Python with mpi4py/numpy/vegas, one mass index per job.
+# archived/condor-brem-mcp-production/run_lxplus_brem.sh: the shared start
+# (condor.Batch.enter; the LCG view brings OpenMPI), then a venv Python with
+# mpi4py/numpy/vegas, one mass index per job.
 _CONDOR_WRAPPER = """\
 #!/usr/bin/env bash
 set -euo pipefail
 MASS_INDEX="${{1:?mass index required}}"
 NCPUS="${{2:-{n_proc}}}"
 
-WORKDIR="${{BREM_WORKDIR:-{workdir}}}"
-[[ -d "$WORKDIR" ]] || WORKDIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$WORKDIR"
-mkdir -p condor_logs brem_out
-
-for setup in \\
-  /cvmfs/sft.cern.ch/lcg/views/LCG_106/x86_64-el9-gcc13-opt/setup.sh \\
-  /cvmfs/sft.cern.ch/lcg/views/LCG_105/x86_64-el9-gcc13-opt/setup.sh
-do
-  if [[ -f "$setup" ]]; then
-    set +u
-    source "$setup"
-    set -u
-    break
-  fi
-done
+{enter}
 
 # A venv (PYTHON_BIN, the active one, or brem_venv/ in this bundle) must not
 # see the LCG view's Python path; the view's own python3 is the fallback.
@@ -137,7 +119,7 @@ mcpsim brem bundle: {n_masses} jobs, one per mass in brem_masses.txt, for
 (override with BREM_WORKDIR if you move the bundle).
 
 1. Python with mpi4py, numpy and vegas (once):
-     source /cvmfs/sft.cern.ch/lcg/views/LCG_106/x86_64-el9-gcc13-opt/setup.sh
+     source {lcg_view}
      python3 -m venv brem_venv && brem_venv/bin/pip install mpi4py numpy vegas
    (or use another Python: environment = "PYTHON_BIN=/path/to/python" in
    brem.sub; Condor jobs do not see your shell's environment)
@@ -154,25 +136,6 @@ mcpsim brem bundle: {n_masses} jobs, one per mass in brem_masses.txt, for
        brem_pattern: "Brem_*.txt"
 """
 
-_CONDOR_SUBMIT = """\
-universe       = vanilla
-executable     = run_brem_job.sh
-arguments      = $(ProcId) {n_proc}
-
-output         = condor_logs/brem.$(ClusterId).$(ProcId).out
-error          = condor_logs/brem.$(ClusterId).$(ProcId).err
-log            = condor_logs/brem.$(ClusterId).log
-
-request_cpus   = {n_proc}
-request_memory = 6GB
-request_disk   = 4GB
-+JobFlavour    = "tomorrow"
-
-# One job per mass in brem_masses.txt (index = ProcId).
-queue {n_masses}
-"""
-
-
 def prepare_condor_brem(cfg: Config, masses: np.ndarray, work_dir: Path, *,
                         n_proc: int = 8, nitn: int = 10, neval: int = 4000,
                         grid_size: int = 100, submit: bool = True) -> Path:
@@ -182,44 +145,23 @@ def prepare_condor_brem(cfg: Config, masses: np.ndarray, work_dir: Path, *,
     that queues one job per mass. Submits via condor_submit when available;
     otherwise prints the manual command. Returns the (async) output directory.
     """
-    work_dir.mkdir(parents=True, exist_ok=True)
-    (work_dir / "condor_logs").mkdir(exist_ok=True)
-    out_dir = work_dir / "brem_out"
-    out_dir.mkdir(exist_ok=True)
+    masses = np.atleast_1d(masses)
+    batch = condor.Batch("brem", masses.size, n_proc, memory="6GB", disk="4GB",
+                         flavour="tomorrow")
+    out_dir = batch.make_dirs(work_dir)
 
     script = _prepare_patched_script(cfg, work_dir)
-    masses = np.atleast_1d(masses)
     np.savetxt(work_dir / "brem_masses.txt", masses, fmt="%.6g")
-
-    wrapper = work_dir / "run_brem_job.sh"
-    wrapper.write_text(_CONDOR_WRAPPER.format(
+    batch.write_job(work_dir, _CONDOR_WRAPPER.format(
         n_proc=n_proc, nitn=nitn, neval=neval, grid_size=grid_size, script=script.name,
-        workdir=work_dir.resolve(), mode=FORM_FACTOR_MODE))
-    wrapper.chmod(0o755)
-    (work_dir / "brem.sub").write_text(_CONDOR_SUBMIT.format(
-        n_proc=n_proc, n_masses=masses.size))
+        enter=batch.enter(work_dir.resolve()), mode=FORM_FACTOR_MODE))
+    batch.write_submit(work_dir)
     (work_dir / "README_condor.txt").write_text(_CONDOR_README.format(
         n_masses=masses.size, name=cfg.name, energy=cfg.beam.energy_gev,
-        target=cfg.target.name, workdir=work_dir.resolve(), out_dir=out_dir.resolve()))
-
-    if submit and shutil.which("condor_submit"):
-        common.run(["condor_submit", "brem.sub"], cwd=work_dir)
-        print(f"[mcpsim] submitted {masses.size} Condor jobs; outputs -> {out_dir} "
-              f"(re-run `mcpsim run` once they finish).")
-    elif submit:
-        # Submission was requested but there is no scheduler here. The bundle
-        # is written and usable — but exiting 0 with a scrolled-away print
-        # previously made this look like a successful submission.
-        raise common.ToolchainError(
-            f"Condor bundle written to {work_dir} ({masses.size} jobs) but "
-            f"'condor_submit' is not on PATH — nothing was submitted. Submit "
-            f"from a Condor node with: cd {work_dir} && condor_submit brem.sub "
-            f"(or use --no-submit to silence this)."
-        )
-    else:
-        print(f"[mcpsim] Condor bundle (--no-submit) written to {work_dir} "
-              f"({masses.size} jobs); see README_condor.txt there. Submit with:\n"
-              f"  cd {work_dir} && condor_submit brem.sub")
+        target=cfg.target.name, workdir=work_dir.resolve(), out_dir=out_dir.resolve(),
+        lcg_view=condor.LCG_VIEWS[0]))
+    batch.submit(work_dir, submit,
+                 f"outputs -> {out_dir} (re-run `mcpsim run` once they finish).")
     return out_dir
 
 

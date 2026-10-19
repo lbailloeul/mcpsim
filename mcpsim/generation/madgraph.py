@@ -38,7 +38,7 @@ from .. import __version__, geometry, paths
 from ..config import Config, config_from_record
 from ..physics.constants import DY_PAIR_MASS_MIN_GEV
 from ..physics.dy_lo import fixed_target_s, fixed_target_y_cm
-from . import common
+from . import common, condor
 
 # PDG id of the millicharged fermion: 31 in BOTH the original Minimal_MCP UFO
 # (Zenodo 10.5281/zenodo.18330380) and the in-repo models/mcp_ufo, matching
@@ -347,11 +347,10 @@ def prepare_condor_dy(cfg: Config, masses: np.ndarray, work_dir: Path, *,
     for without it, and with submit=False prints the command. Returns the
     (dy_cross, dy_ageo) paths the batch fills when its last job finishes."""
     work_dir = Path(work_dir).resolve()
-    work_dir.mkdir(parents=True, exist_ok=True)
-    (work_dir / "condor_logs").mkdir(exist_ok=True)
-    (work_dir / "dy_out").mkdir(exist_ok=True)
-
     masses = np.atleast_1d(masses).astype(float)
+    batch = condor.Batch("dy", masses.size, n_proc, memory="2GB", disk="2GB",
+                         flavour="workday")
+    batch.make_dirs(work_dir)
     model = Path(_local_model(_resolve_model(cfg), work_dir))
     np.savetxt(work_dir / "dy_masses.txt", masses, fmt="%.10g")
     (work_dir / "config.json").write_text(json.dumps(asdict(cfg), indent=1))
@@ -366,17 +365,14 @@ def prepare_condor_dy(cfg: Config, masses: np.ndarray, work_dir: Path, *,
     (work_dir / "dy_job.py").write_text(_DY_JOB_LAUNCHER.format(
         sys_path=f"sys.path.insert(0, {str(src)!r})" if src else
         "# (written by an installed mcpsim: the jobs import the installed one)"))
-    wrapper = work_dir / "run_dy_job.sh"
-    wrapper.write_text(_DY_CONDOR_WRAPPER.format(
-        n_proc=n_proc, mg5_dir=mg5_dir, workdir=work_dir))
-    wrapper.chmod(0o755)
-    (work_dir / "dy.sub").write_text(_DY_CONDOR_SUBMIT.format(
-        n_proc=n_proc, n_masses=masses.size))
+    batch.write_job(work_dir, _DY_CONDOR_WRAPPER.format(
+        n_proc=n_proc, mg5_dir=mg5_dir, enter=batch.enter(work_dir)))
+    batch.write_submit(work_dir)
 
     dy_cross, dy_ageo = _scan_paths(cfg, work_dir)
     (work_dir / "README_condor.txt").write_text(_DY_CONDOR_README.format(
         n_masses=masses.size, name=cfg.name, energy=cfg.beam.energy_gev, nevents=nevents,
-        pdf_set=DY_PDF_SET, lhaid=DY_PDF_LHAID,
+        pdf_set=DY_PDF_SET, lhaid=DY_PDF_LHAID, lcg_view=condor.LCG_VIEWS[0],
         workdir=work_dir, dy_cross=dy_cross, dy_ageo=dy_ageo,
         mg5_line=(f"The jobs use MG5_DIR = {mg5_dir}\n   (the one on PATH when "
                   f"this bundle was written), else mg5_aMC on PATH." if mg5_dir else
@@ -391,21 +387,8 @@ def prepare_condor_dy(cfg: Config, masses: np.ndarray, work_dir: Path, *,
                      f"     python3 -m venv dy_venv && dy_venv/bin/pip install <your mcpsim source>\n"
                      f"   or set PYTHON_BIN to a Python that has it.")))
 
-    if submit and shutil.which("condor_submit"):
-        common.run(["condor_submit", "dy.sub"], cwd=work_dir)
-        print(f"[mcpsim] submitted {masses.size} Condor jobs; the last to finish "
-              f"writes {dy_cross.name} and {dy_ageo.name} in {work_dir}.")
-    elif submit:
-        raise common.ToolchainError(
-            f"Condor bundle written to {work_dir} ({masses.size} jobs) but "
-            f"'condor_submit' is not on PATH — nothing was submitted. Submit "
-            f"from a Condor node with: cd {work_dir} && condor_submit dy.sub "
-            f"(or use --no-submit to silence this)."
-        )
-    else:
-        print(f"[mcpsim] Condor bundle (--no-submit) written to {work_dir} "
-              f"({masses.size} jobs); see README_condor.txt there. Submit with:\n"
-              f"  cd {work_dir} && condor_submit dy.sub")
+    batch.submit(work_dir, submit, f"the last to finish writes {dy_cross.name} and "
+                                   f"{dy_ageo.name} in {work_dir}.")
     return dy_cross, dy_ageo
 
 
@@ -501,10 +484,8 @@ except ImportError as exc:
 main(sys.argv[1:])
 '''
 
-# Per-job wrapper, modelled on the brem bundle's run_brem_job.sh: cd to the
-# bundle on the shared filesystem by absolute path (a worker runs the
-# executable from its own scratch copy), source a CERN LCG view (compilers
-# and LHAPDF for MadGraph) with `set -u` off, then run dy_job.py.
+# Per-job wrapper: the shared start (condor.Batch.enter; the LCG view brings
+# the compilers and LHAPDF MadGraph needs), then dy_job.py.
 _DY_CONDOR_WRAPPER = """\
 #!/usr/bin/env bash
 # One Drell-Yan job: MadGraph for the mass on line <index> of dy_masses.txt
@@ -516,22 +497,7 @@ JOB_INDEX="${{1:?job index required}}"
 NCPUS="${{2:-{n_proc}}}"
 MG5_DIR="${{MG5_DIR:-{mg5_dir}}}"
 
-WORKDIR="${{DY_WORKDIR:-{workdir}}}"
-[[ -d "$WORKDIR" ]] || WORKDIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$WORKDIR"
-mkdir -p condor_logs dy_out
-
-for setup in \\
-  /cvmfs/sft.cern.ch/lcg/views/LCG_106/x86_64-el9-gcc13-opt/setup.sh \\
-  /cvmfs/sft.cern.ch/lcg/views/LCG_105/x86_64-el9-gcc13-opt/setup.sh
-do
-  if [[ -f "$setup" ]]; then
-    set +u
-    source "$setup"
-    set -u
-    break
-  fi
-done
+{enter}
 
 if [[ -n "$MG5_DIR" && -x "$MG5_DIR/bin/mg5_aMC" ]]; then
   export PATH="$MG5_DIR/bin:$PATH"
@@ -565,24 +531,6 @@ echo "job ${{JOB_INDEX}} on $(hostname), ${{NCPUS}} CPU(s), python ${{PYTHON_BIN
   ${{DY_NEVENTS:+--nevents "$DY_NEVENTS"}}
 """
 
-_DY_CONDOR_SUBMIT = """\
-universe       = vanilla
-executable     = run_dy_job.sh
-arguments      = $(ProcId) {n_proc}
-
-output         = condor_logs/dy.$(ClusterId).$(ProcId).out
-error          = condor_logs/dy.$(ClusterId).$(ProcId).err
-log            = condor_logs/dy.$(ClusterId).log
-
-request_cpus   = {n_proc}
-request_memory = 2GB
-request_disk   = 2GB
-+JobFlavour    = "workday"
-
-# One job per mass in dy_masses.txt (index = ProcId).
-queue {n_masses}
-"""
-
 _DY_CONDOR_README = """\
 mcpsim Drell-Yan bundle: {n_masses} jobs, one per mass in dy_masses.txt, for
 {name} ({energy:g} GeV beam): MadGraph LO q q~ > chi chi~ with {pdf_set}
@@ -602,7 +550,7 @@ the defaults at the top of run_dy_job.sh, or in dy.sub as
 2. The PDF set {pdf_set} (LHAPDF id {lhaid}). LHAPDF >= 6.5 rejects its
    .info file, which predates two keys it now requires, so give the jobs a
    patched copy in lhapdf/ here (used first). Once:
-     source /cvmfs/sft.cern.ch/lcg/views/LCG_106/x86_64-el9-gcc13-opt/setup.sh
+     source {lcg_view}
      mkdir -p lhapdf && cd lhapdf
      cp "$(lhapdf-config --datadir)/pdfsets.index" .
      curl -L https://lhapdfsets.web.cern.ch/current/{pdf_set}.tar.gz | tar xz
