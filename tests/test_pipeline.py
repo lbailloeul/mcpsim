@@ -219,6 +219,16 @@ def test_a_result_carries_the_detector_its_run_modelled(mini_config, tmp_path):
     assert "Detector: r = 0.3 m disc at 40 m" in (tmp_path / f"limit_curve_{cfg.tag}.txt").read_text()
 
 
+def test_the_limit_curve_lists_only_the_channels_that_gave_a_yield(mini_config, tmp_path):
+    from mcpsim.model import compute_production
+    from mcpsim.pipeline import write_tables
+    result = compute_production(replace(mini_config, channels=["meson_decay", "brem"]))
+    left_out = replace(result, brem_central=None, brem_low=None, brem_high=None)
+    write_tables(left_out, tmp_path)
+    text = (tmp_path / f"limit_curve_{mini_config.tag}.txt").read_text()
+    assert "Channels: meson_decay (fidelity corrected)" in text
+
+
 def test_limit_curve_file_for_collaborators(mini_config, tmp_path):
     from mcpsim.model import compute_production
     from mcpsim.pipeline import write_tables

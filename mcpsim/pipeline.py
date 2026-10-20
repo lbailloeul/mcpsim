@@ -115,6 +115,11 @@ def write_limit_curve(result: ProductionResult, eps: np.ndarray, floor: float,
     s, b = cfg.sensitivity, cfg.beam
     ok = np.isfinite(eps)
     n_floor = int(np.sum(ok & (eps <= floor)))
+    # A requested channel can be skipped at run time (e.g. brem past its grids).
+    gave_yield = {"meson_decay": bool(result.meson_channels),
+                  "brem": result.brem_central is not None,
+                  "drell_yan": result.drell_yan is not None}
+    channels = ", ".join(c for c in cfg.channels if gave_yield[c]) or "none"
     lines = [
         f"mcpsim limit curve: {cfg.name}",
         f"The excluded region lies above this curve: the epsilon = Q/e at which the "
@@ -124,7 +129,7 @@ def write_limit_curve(result: ProductionResult, eps: np.ndarray, floor: float,
         f"n_gamma = {s.n_gamma:g} photoelectrons at eps = 1, a = {s.a:g}",
         f"Beam: {b.energy_gev:g} GeV protons on {cfg.target.name}, {b.n_pot:.3g} POT ({b.frame})",
         f"Detector: {geometry.face_signature(cfg.detector)}",
-        f"Channels: {', '.join(cfg.channels)} (fidelity {cfg.engine.fidelity})",
+        f"Channels: {channels} (fidelity {cfg.engine.fidelity})",
         f"{int(np.sum(~ok))} of {masses.size} mass points never reach N and are omitted.",
     ]
     if n_floor:
