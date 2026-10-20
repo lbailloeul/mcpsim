@@ -418,9 +418,9 @@ def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> N
             acc, why_not = _lo_dy_acceptance(cfg, tab.masses[rows])
             if acc is None:
                 result.warnings.append(
-                    f"Drell-Yan acceptance is the LO acceptance of the preset's "
-                    f"detector ({tab.acc_detector}), not yours ({face}); {why_not}. "
-                    f"Treat this channel as approximate.")
+                    f"no Drell-Yan acceptance for this detector ({face}), only the "
+                    f"table's for {tab.acc_detector}; {why_not}; skipping.")
+                return
             else:
                 result.warnings.append(
                     f"Drell-Yan acceptance recomputed at LO for this detector ({face}) "
@@ -435,6 +435,11 @@ def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> N
                 f"'{t.name}' at {cfg.beam.energy_gev:g} GeV and no data.dy_cross/"
                 f"dy_ageo scan; skipping.")
             return
+        if not acceptance_file_valid(cfg, cfg.data.dy_ageo):
+            result.warnings.append(
+                f"Drell-Yan acceptance is {_not_this_detector(cfg, cfg.data.dy_ageo)}, "
+                f"and a scan's acceptance is not recomputed; skipping.")
+            return
         cross = str(paths.resolve_data(cfg.data.dy_cross))
         ageo = str(paths.resolve_data(cfg.data.dy_ageo))
         try:
@@ -443,11 +448,6 @@ def _add_drell_yan(cfg: Config, grid: np.ndarray, result: ProductionResult) -> N
             result.warnings.append("Drell-Yan input files missing; skipping.")
             return
         _check_dy_scan(cfg, cross, ageo, result)
-        if not acceptance_file_valid(cfg, cfg.data.dy_ageo):
-            result.warnings.append(
-                f"Drell-Yan acceptance is {_not_this_detector(cfg, cfg.data.dy_ageo)} "
-                f"— it is not recomputed for custom or off-axis detectors. Treat "
-                f"this channel as approximate.")
     order = np.argsort(m)
     result.drell_yan = np.interp(grid, m[order], y[order], left=0.0, right=0.0)
 

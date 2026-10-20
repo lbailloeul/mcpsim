@@ -9,7 +9,7 @@ from mcpsim import paths
 from mcpsim.model import compute_production
 
 
-def test_all_channels_assemble(mini_config):
+def test_all_channels_assemble(mini_config, toy_pdf_grids):
     result = compute_production(mini_config)
     assert set(result.meson_channels) >= {"pi0", "eta", "rho", "omega", "phi", "jpsi"}
     assert result.brem_central is not None
@@ -129,10 +129,16 @@ def test_an_off_axis_face_gets_its_own_drell_yan_acceptance(tmp_path, toy_pdf_gr
     far = compute_production(_flame_drell_yan(tmp_path, 14.0))
     assert any("Drell-Yan acceptance recomputed at LO" in w for w in near.warnings)
     assert np.all(far.drell_yan < near.drell_yan)            # further off axis, less
+    from mcpsim import load_preset
+    tables_face = compute_production(replace(_flame_drell_yan(tmp_path, 4.0),
+                                             detector=load_preset("darkquest").detector))
+    assert np.all(near.drell_yan < 1e-3 * tables_face.drell_yan)       # 1 x 1 m at 40 m
     monkeypatch.delenv("MCPSIM_PDFSETS")
     monkeypatch.setattr(paths, "CACHE_DIR", tmp_path / "no-cache")
-    tables_face = compute_production(_flame_drell_yan(tmp_path, 4.0))   # 1 x 1 m at 40 m
-    assert np.all(near.drell_yan < 1e-3 * tables_face.drell_yan)
+    skipped = compute_production(_flame_drell_yan(tmp_path, 4.0))
+    assert skipped.drell_yan is None
+    assert any("no Drell-Yan acceptance for this detector" in w and w.endswith("skipping.")
+               for w in skipped.warnings)
 
 
 def test_a_recomputed_drell_yan_acceptance_is_reused_without_the_grids(tmp_path, toy_pdf_grids,
@@ -144,20 +150,22 @@ def test_a_recomputed_drell_yan_acceptance_is_reused_without_the_grids(tmp_path,
     assert any("Drell-Yan acceptance recomputed at LO" in w for w in again.warnings)
 
 
-def test_drell_yan_custom_geometry_warns(mini_config, no_pdf_grids):
+def test_drell_yan_for_another_detector_is_skipped(mini_config, no_pdf_grids):
     from mcpsim import load_preset
-    # the tables carry the preset's 1 x 1 m face: another detector is warned
+    # the tables carry the preset's 1 x 1 m face: without a recompute, another
+    # detector gets no Drell-Yan rather than that face's
     result = compute_production(mini_config)                 # r = 0.5 m disc
-    assert result.drell_yan is not None
-    assert any("LO acceptance of the preset's detector (1 x 1 m face at 40 m)" in w
+    assert result.drell_yan is None
+    assert any("only the table's for 1 x 1 m face at 40 m" in w
                and "MCPSIM_PDFSETS" in w for w in result.warnings)
     face = replace(mini_config, detector=load_preset("darkquest").detector)
     assert not any("acceptance" in w and "Drell-Yan" in w
                    for w in compute_production(face).warnings)
     # a scan's acceptance file is the preset geometry's
-    scan = replace(mini_config, dy_cross_is_preset=False, geometry_is_preset=False)
-    assert any("Drell-Yan acceptance is the PRESET-geometry file" in w
-               for w in compute_production(scan).warnings)
+    scan = compute_production(replace(mini_config, dy_cross_is_preset=False,
+                                      geometry_is_preset=False))
+    assert scan.drell_yan is None
+    assert any("Drell-Yan acceptance is the PRESET-geometry file" in w for w in scan.warnings)
 
 
 def test_drell_yan_normalisation_follows_target(mini_config):
@@ -185,12 +193,13 @@ def test_drell_yan_undeclared_material_warns(mini_config):
 
 @pytest.mark.parametrize("name", ["iron", "molybdenum", "tungsten", "carbon"])
 def test_drell_yan_uses_the_target_material_table(mini_config, mini_repo, name):
-    from mcpsim import paths
+    from mcpsim import load_preset, paths
     from mcpsim.config import TargetConfig
     from mcpsim.physics import drellyan
     from mcpsim.physics.constants import MB_TO_PB
     t = TargetConfig().overlay({"name": name})
-    res = compute_production(replace(mini_config, target=t))
+    res = compute_production(replace(mini_config, target=t, channels=["drell_yan"],
+                                     detector=load_preset("darkquest").detector))
     table = drellyan.load_table(drellyan.find_table(paths.DY_TABLES_DIR, 120.0, name))
     assert table.header["material"] == name and table.header["beam_energy_gev"] == "120"
     per_mass = (mini_config.beam.n_pot * table.sigma_pb * table.acc
@@ -202,13 +211,15 @@ def test_drell_yan_uses_the_target_material_table(mini_config, mini_repo, name):
 
 
 def test_drell_yan_tables_differ_by_material(mini_config):
+    from mcpsim import load_preset
     from mcpsim.config import TargetConfig
     from mcpsim.physics.drellyan import sigma_inel_per_nucleon_mb
     # undo the per-POT normalisation: what is left is the material's table
     per_nucleon = {}
     for name in ("carbon", "iron", "molybdenum", "tungsten"):
         t = TargetConfig().overlay({"name": name})
-        dy = compute_production(replace(mini_config, target=t)).drell_yan
+        dy = compute_production(replace(mini_config, target=t, channels=["drell_yan"],
+                                        detector=load_preset("darkquest").detector)).drell_yan
         per_nucleon[name] = dy[-1] * sigma_inel_per_nucleon_mb(t.density_g_cm3, t.interaction_length_cm)
     values = sorted(per_nucleon.values())
     assert all(b / a > 1.001 for a, b in zip(values, values[1:]))     # all distinct
