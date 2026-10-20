@@ -190,12 +190,6 @@ def test_only_the_rules_table_tells_the_fidelity_modes_apart():
     assert found == [], "read cfg.engine.rules instead:\n" + "\n".join(found)
 
 
-def test_an_upsilon_acceptance_and_sample_cannot_both_be_given(tmp_path):
-    with pytest.raises(ValueError, match="upsilon_ageo and data.upsilon_sample"):
-        _load(tmp_path, {"preset": "flame",
-                         "data": {"upsilon_ageo": 1e-4, "upsilon_sample": "upsilon.root"}})
-
-
 def test_scintillator_derives_ngamma(tmp_path):
     p = _write(tmp_path, "name: t\nbeam: {energy_gev: 120.0}\n"
                          "detector: {type: bar_array, bar_length_m: 0.75}\n"

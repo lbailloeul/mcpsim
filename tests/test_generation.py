@@ -163,7 +163,7 @@ def test_archived_samples_follow_the_beam_within_two_percent():
 
 def _fake_mesongen(cards):
     """common.run stand-in for mesonGen: keeps the PYTHIA card it was handed and
-    writes three upsilons per thread where mesonGen does."""
+    writes three parents per thread where mesonGen does."""
     import uproot
 
     def run(cmd, cwd=None, env=None):
@@ -175,24 +175,6 @@ def _fake_mesongen(cards):
                 f["mesons"] = {"px": np.full(3, 0.1), "py": np.zeros(3),
                                "pz": np.full(3, 50.0), "e": np.full(3, 50.9)}
     return run
-
-
-def test_an_upsilon_sample_comes_from_the_bottomonium_processes(mini_repo, tmp_path, monkeypatch):
-    import uproot
-    from click.testing import CliRunner
-    from mcpsim.cli import cli
-    from mcpsim.generation import common
-    cards = []
-    monkeypatch.setattr(common, "compile_cpp", lambda src, out, *a, **k: out)
-    monkeypatch.setattr(common, "run", _fake_mesongen(cards))
-    r = CliRunner().invoke(cli, ["generate", "upsilon", "--preset", "flame", "--n-proc", "2",
-                                 "--pthat-min", "1.5", "-o", str(tmp_path)])
-    assert r.exit_code == 0, r.output
-    assert "Bottomonium:all = on" in cards[0] and "PhaseSpace:pTHatMin = 1.5" in cards[0]
-    assert "HardQCD" not in cards[0]
-    sample = tmp_path.resolve() / "generated" / "upsilon" / "upsilon_120GeV.root"
-    assert f"upsilon_sample: {sample}" in r.output
-    assert uproot.open(sample)["mesons"].num_entries == 6          # both threads, merged
 
 
 def test_parent_samples_get_the_archived_hard_qcd_card(tmp_path, monkeypatch):

@@ -78,23 +78,6 @@ def test_short_single_column_acceptance_raises(mini_config, tmp_path):
         compute_production(replace(mini_config, channels=["meson_decay"], data=data))
 
 
-def test_an_upsilon_sample_gives_the_upsilon_its_own_acceptance(mini_config, tmp_path,
-                                                                 monkeypatch):
-    import uproot
-    rng = np.random.default_rng(3)
-    px, py, pz = rng.normal(0, 1, 2000), rng.normal(0, 1, 2000), rng.uniform(20, 80, 2000)
-    sample = tmp_path / "upsilon_120GeV.root"
-    with uproot.recreate(sample) as f:
-        f["mesons"] = {"px": px, "py": py, "pz": pz,
-                       "e": np.sqrt(px ** 2 + py ** 2 + pz ** 2 + 9.46 ** 2)}
-    monkeypatch.setattr(paths, "CACHE_DIR", tmp_path / "cache")
-    flame = replace(mini_config, family="flame", channels=["meson_decay"])
-    assert "upsilon" not in compute_production(flame).meson_channels      # nothing to borrow
-    result = compute_production(replace(flame, data=replace(flame.data, upsilon_sample=str(sample))))
-    assert result.meson_channels["upsilon"].min() > 0
-    assert not any("upsilon" in w for w in result.warnings)
-
-
 def test_config_notes_reach_warnings(mini_config):
     cfg = replace(mini_config, notes=["synthetic note"])
     result = compute_production(cfg)

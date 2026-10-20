@@ -249,9 +249,6 @@ def geometry_hash(cfg: Config, meson: str, grid: np.ndarray) -> str:
         "sample": [spec.file, spec.n_use, spec.repeats] if spec else None,
         "grid": [float(grid[0]), float(grid[-1]), int(grid.size)],
     }
-    if meson == "upsilon" and cfg.data.upsilon_sample and spec:
-        stat = Path(spec.file).stat()          # a user's sample can be regenerated in place
-        payload["sample_stat"] = [stat.st_size, stat.st_mtime_ns]
     return hashlib.md5(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
 

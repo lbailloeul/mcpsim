@@ -66,8 +66,7 @@ a warning (its precomputed brem/DY inputs were made at *its* energy).
 name: my_experiment        # display name; slug becomes the output directory
 preset: darkquest          # optional explicit base preset (typos raise)
 family: darkquest          # upsilon flat-acceptance + plot-color key
-                           #   known: darkquest, ship; anything else skips the
-                           #   upsilon unless data.upsilon_sample gives one
+                           #   known: darkquest, ship; anything else skips upsilon
 source_repo: /path/to/data # optional override of MCPSIM_SOURCE_REPO
 
 beam:
@@ -167,8 +166,6 @@ data:                      # fast-mode inputs; bare names resolve inside the
     pi0: 4.7               #   beam energy without tabulated values
     eta: 0.53
   upsilon_ageo: null       # explicit flat upsilon acceptance (overrides family)
-  upsilon_sample: null     # PYTHIA upsilon parents (mcpsim generate upsilon):
-                           #   the upsilon gets its own acceptance
 ```
 
 Strictness: unknown keys at the top level or in any section **raise**, with a
@@ -213,8 +210,4 @@ mcpsim generate brem --preset darkquest --condor --n-proc 8
 # Drell-Yan scan on LXPLUS, one MadGraph job per mass (README_condor.txt in
 # the bundle covers MadGraph, the PDF set and the workers' Python):
 mcpsim generate dy --preset darkquest --condor
-
-# Upsilon parents from PYTHIA's bottomonium processes (LXPLUS has PYTHIA);
-# name the printed file as data.upsilon_sample in a run's config:
-mcpsim generate upsilon --preset flame
 ```

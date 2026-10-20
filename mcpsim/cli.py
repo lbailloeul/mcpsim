@@ -474,17 +474,13 @@ def compare_cmd(presets, configs, out, **overrides) -> None:
 
 
 @cli.command("generate")
-@click.argument("step", type=click.Choice(["mesons", "brem", "dy", "upsilon"]))
+@click.argument("step", type=click.Choice(["mesons", "brem", "dy"]))
 @_options(*_common, *_engine_opts)
 @click.option("--mass-subset", type=int, default=None, help="Use only N masses.")
-@click.option("--trials", type=int, default=None,
-              help="Meson-generation trials (upsilon: PYTHIA events, default 20000).")
-@click.option("--pthat-min", type=float, default=None,
-              help="upsilon: PYTHIA PhaseSpace:pTHatMin [GeV] for the bottomonium "
-                   "processes [default: 2, as the archived samples].")
+@click.option("--trials", type=int, default=None, help="Meson-generation trials.")
 @click.option("--n-proc", type=int, default=None,
-              help="Cores: MPI ranks for brem; per job under --condor (dy: MadGraph cores); "
-                   "upsilon: PYTHIA threads [default: the backend's own].")
+              help="Cores: MPI ranks for brem; per job under --condor (dy: MadGraph cores) "
+                   "[default: the backend's own].")
 @click.option("--brem-grid-size", type=int, default=None,
               help="VEGAS (theta,p) grid size [default: the backend's own].")
 @click.option("--brem-neval", type=int, default=None,
@@ -498,32 +494,18 @@ def compare_cmd(presets, configs, out, **overrides) -> None:
                    "running locally.")
 @click.option("--no-submit", is_flag=True,
               help="With --condor, write the bundle but do not call condor_submit.")
-def generate_cmd(step, out, mass_subset, trials, pthat_min, n_proc, brem_grid_size,
-                 brem_neval, brem_nitn, dy_nevents, condor, no_submit, **source) -> None:
-    """Run a single heavy generation step (mesons / brem / dy / upsilon).
+def generate_cmd(step, out, mass_subset, trials, n_proc, brem_grid_size, brem_neval,
+                 brem_nitn, dy_nevents, condor, no_submit, **source) -> None:
+    """Run a single heavy generation step (mesons / brem / dy).
 
-    `upsilon` makes a PYTHIA sample of upsilon parents from the bottomonium
-    processes; name it as data.upsilon_sample to give the upsilon its own
-    acceptance. Exits non-zero when the step produced no outputs (e.g. a
-    missing toolchain); the reason is printed as a warning.
+    Exits non-zero when the step produced no outputs (e.g. a missing
+    toolchain); the reason is printed as a warning.
     """
     from .pipeline import regenerate_inputs
     batch = _condor_opts(condor, no_submit)
-    if condor and step in ("mesons", "upsilon"):
+    if condor and step == "mesons":
         raise click.UsageError("--condor applies to brem and dy.")
     cfg = _config(**source)
-    if step == "upsilon":
-        from .generation import common, mesons
-        try:
-            sample = mesons.generate_upsilon_sample(
-                cfg, paths.output_dir(out, cfg.tag) / "generated" / "upsilon",
-                trials=trials or 20_000, pthat_min=2.0 if pthat_min is None else pthat_min,
-                n_cores=n_proc or 1)
-        except common.ToolchainError as exc:
-            raise click.ClickException(str(exc))
-        click.echo(f"Upsilon sample: {sample}\nUse it in a run by adding to your config:\n"
-                   f"data:\n  upsilon_sample: {sample}")
-        return
     # Restrict to the one requested channel so only that backend runs.
     channel = normalize_channels([step])[0]
     cfg = replace(cfg, channels=[channel])

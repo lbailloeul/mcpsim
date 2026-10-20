@@ -152,9 +152,9 @@ def _add_meson_channels(cfg: Config, grid: np.ndarray, result: ProductionResult)
             continue  # not produced at this beam energy (e.g. heavy states at low E)
         c = rates[name]
 
-        if name == "upsilon" and not cfg.data.upsilon_sample:
-            # No sample of its own: borrow. MESONS orders jpsi before upsilon,
-            # so its acceptance for THIS run is already in hand.
+        if name == "upsilon":
+            # MESONS orders jpsi before upsilon, so its acceptance for THIS run
+            # is already in hand.
             ua = _upsilon_ageo(cfg, computed.get("jpsi"), result)
             if ua is None:
                 continue
@@ -285,9 +285,7 @@ def _meson_ageo(cfg: Config, name: str, grid: np.ndarray,
                     f"recomputed for this detector.")
             return pydecay.cached_acceptance(cfg, name, grid,
                                              paths.CACHE_DIR / "acceptance")
-        reason = (f"upsilon sample {cfg.data.upsilon_sample} not found"
-                  if name == "upsilon" and cfg.data.upsilon_sample else
-                  f"archived PYTHIA sample for '{name}' not found under "
+        reason = (f"archived PYTHIA sample for '{name}' not found under "
                   f"{samples.samples_dir(cfg)}")
     else:
         reason = ("engine.decay = 'cpp': run `mcpsim generate mesons --engine cpp` "

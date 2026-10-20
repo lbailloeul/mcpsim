@@ -33,9 +33,8 @@ The Υ is the one meson with no acceptance scan behind it. It is produced far
 too rarely for a parent sample to be built: at 120 GeV the Υ comes out some
 1.6×10⁴ times less often than the J/ψ (`C_MESON_BY_BEAM`), and even the J/ψ
 sample we have holds only 4132 events, reused 600 times over. An Υ sample of
-comparable size from the same hard-QCD generation is a PYTHIA campaign in its
-own right, and attempts to produce one have not been practical (the dedicated
-bottomonium processes below avoid this).
+comparable size is a PYTHIA campaign in its own right, and attempts to produce
+one have not been practical.
 
 In its place the Υ borrows the J/ψ's acceptance: the **first (low-mass) value of
 the J/ψ acceptance computed for that same run**, held flat across the mass grid.
@@ -58,19 +57,6 @@ carrying a borrowed number into territory no scan has covered.
 re-decays archived parents and there are none for the Υ. What it does do is
 compute the J/ψ acceptance for your geometry, which is then what the Υ borrows.
 
-An Υ sample of its own comes from PYTHIA's dedicated bottomonium processes
-instead of hard QCD. `mcpsim generate upsilon` runs `Bottomonium:all = on`
-(colour-singlet and colour-octet production of the Υ states and the χ_b that
-feed them), where every event holds an Υ, so a few thousand parents take
-minutes. Name the file as `data.upsilon_sample` and the Python engine re-decays
-it like any other meson, for your geometry; the borrow is then not used, and
-the rate stays `C_MESON_BY_BEAM`'s, since only the kinematics come from the
-sample. These processes diverge as pT → 0 (PYTHIA manual, Onia processes), so
-the sample carries a pT̂ cut, 2 GeV by default like the archived samples
-(`--pthat-min`). Near threshold at √s ≈ 15 GeV the low-pT kinematics are
-model-dependent, which matters most for an off-axis face: vary the cut to
-size the effect.
-
 Two things gate the channel (`model._upsilon_ageo`):
 
 - **`family`** decides whether the Υ runs at all (`constants.UPSILON_FAMILIES`,
@@ -82,8 +68,7 @@ Two things gate the channel (`model._upsilon_ageo`):
   borrow from and the channel is skipped rather than falling back on a number
   measured at some other detector.
 
-`data.upsilon_ageo` (a flat value of your own) or `data.upsilon_sample` (an
-acceptance computed from an Υ sample, above) replaces the borrow; give one.
+`data.upsilon_ageo` overrides both, if you have a better value.
 
 ## Off-axis acceptance: the azimuthal kernel
 

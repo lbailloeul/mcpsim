@@ -71,28 +71,17 @@ DEFAULT_SAMPLES: Dict[str, Dict[str, SampleSpec]] = {
 }
 
 
-# A generated upsilon sample (`mcpsim generate upsilon`: ~15k parents from its
-# default 20k events) is re-decayed this often, ~1e6 decays like the others.
-UPSILON_REPEATS = 50
-
-
 def _sample_set(cfg: Config) -> Optional[Dict[str, SampleSpec]]:
     """The sample set matching this config's beam, or None if there is none.
 
     With engine.samples_dir set the user supplies their own files, so the beam
     guard is waived and the 120 GeV naming is used as the filename convention.
-    data.upsilon_sample adds the upsilon, whose file the config names.
     """
     key = next((k for k in DEFAULT_SAMPLES
                 if C.same_beam(cfg.beam.energy_gev, float(k))), None)
     if key is not None:
-        specs = DEFAULT_SAMPLES[key]
-    else:
-        specs = DEFAULT_SAMPLES["120"] if cfg.engine.samples_dir else None
-    if cfg.data.upsilon_sample:
-        specs = {**(specs or {}), "upsilon": SampleSpec(
-            str(paths.resolve_data(cfg.data.upsilon_sample)), None, UPSILON_REPEATS)}
-    return specs
+        return DEFAULT_SAMPLES[key]
+    return DEFAULT_SAMPLES["120"] if cfg.engine.samples_dir else None
 
 
 def sample_spec(cfg: Config, meson: str) -> Optional[SampleSpec]:
