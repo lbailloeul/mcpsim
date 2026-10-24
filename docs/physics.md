@@ -44,9 +44,14 @@ and 109 rows. At an off-axis or custom geometry it is whatever the Python engine
 just computed for *your* detector, so the borrowed number tracks the geometry
 rather than being pinned to the preset's.
 
-For a channel worth about 10⁻⁴ of the J/ψ yield this is a comfortable
-approximation, and it has never shifted a limit. Two things would be worth
-checking if an Υ sample ever becomes available. The J/ψ acceptance is not flat
+Below the J/ψ's kinematic edge the Υ is about 10⁻⁴ of the J/ψ yield and changes
+nothing. Above it the Υ is the only meson channel, and there it does move the
+limit. Without it, the DarkQuest ε limit is up to 6× weaker at about 25 masses
+between 1.6 and 4.7 GeV, where the Υ is up to 99.8% of the yield, and the SHiP
+limit is up to 16% weaker at about 21 masses between 1.8 and 4.7 GeV (both
+fidelities). That stretch of those curves therefore rests on the borrowed
+acceptance. Two things would be worth checking if an Υ sample ever becomes
+available. The J/ψ acceptance is not flat
 across the full range: the same scans rise to 0.019448 (DarkQuest) and 0.04961
 (SHiP) by their last row. And they stop at m_χ = 1.525 GeV, essentially the
 J/ψ's own kinematic edge (m_J/ψ/2 = 1.55 GeV), while Υ → χχ̄ stays open out to
@@ -306,7 +311,7 @@ prints a `!` line when the caveat applies; the rest are documented only.
 
 | Caveat | Effect | Handling |
 |---|---|---|
-| **Υ has no acceptance scan** — it borrows this run's low-mass J/ψ acceptance, flat in mass, beyond the J/ψ scan's 1.525 GeV end; its per-POT rate cannot be checked (that PYTHIA run was never made) | channel is ~10⁻⁴ of the J/ψ; it matters only for m_χ ≈ 1.55–4.73 GeV, where its sole competitor is Drell-Yan | run (when borrowed or skipped); [section above](#acceptance-convention-the-2) |
+| **Υ has no acceptance scan** — it borrows this run's low-mass J/ψ acceptance, flat in mass, beyond the J/ψ scan's 1.525 GeV end; its per-POT rate cannot be checked (that PYTHIA run was never made) | ~10⁻⁴ of the J/ψ below the J/ψ's edge; for m_χ ≈ 1.55–4.73 GeV it is the only meson channel and moves the DarkQuest limit by up to 6× and SHiP's by up to 16%, on the borrowed acceptance | run (when borrowed or skipped); [section above](#acceptance-convention-the-2) |
 | **Meson multiplicities are per hard-QCD trial** (`HardQCD:all`, `pTHatMin = 2`): entries/trials of a biased sample, not per inelastic collision | J/ψ 4.1×10⁻⁵/POT at 120 GeV is ~10× what σ(J/ψ) ≈ 50–80 nb/nucleon at √s ≈ 15 GeV implies (≈3×10⁻⁶ per p-C interaction — an estimate, not yet checked against data); the 0.5–1.5 GeV plateau would be ~1.3× weaker in ε | documented |
 | **Dalitz decays are point-like** (Kroll–Wada rate, no transition form factor) | negligible for π⁰; for η the form factor (Λ ≈ 0.72 GeV) raises the rate by tens of percent to ~2× at m_χ ≈ 0.1–0.25 GeV, so η yields there are conservative | documented |
 | **Brem grids carry their generating detector's acceptance** (single track or shared bar on a 1×1 m face at 40 / 100 m, with the first χ always at azimuth 0) | they resolve the face only out to its half-width, `data.brem_max_theta_mrad` (DarkQuest/FLAME grids 12.5 mrad, SHiP 5 mrad): brem through the corners of the presets' own face is missing (≲ 20% of it), and a far off-axis face collapses at low mass; below that angle, both-χ hits are undercounted by up to ×2 | run |

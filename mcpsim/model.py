@@ -206,7 +206,8 @@ def _upsilon_ageo(cfg: Config, jpsi_ageo, result: ProductionResult):
             result.warnings.append(
                 f"upsilon has no acceptance scan: it borrows this run's low-mass "
                 f"J/psi acceptance ({finite[0]:.4g}) flat in mass, past the J/psi "
-                f"scan's 1.525 GeV end; the channel is ~1e-4 of the J/psi "
+                f"scan's 1.525 GeV end. Above about 1.6 GeV it is the only meson "
+                f"channel and can set the limit, on this borrowed value "
                 f"(docs/physics.md).")
             return float(finite[0])
 

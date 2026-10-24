@@ -15,8 +15,10 @@ Four production channels are combined:
 - Drell-Yan (qq̄ → γ* → χχ̄)
 
 The Υ is a special case. It is produced too rarely to have an acceptance scan
-of its own, so it borrows the J/ψ's. Its contribution is around 10⁻⁴ of the
-J/ψ. See [docs/physics.md](docs/physics.md).
+of its own, so it borrows the J/ψ's low-mass value. Above the J/ψ's reach
+(m_χ ≳ 1.6 GeV) it is the only meson channel, and it moves the DarkQuest and
+SHiP limits there, so that mass range rests on the borrowed acceptance. FLAME
+leaves it out. See [docs/physics.md](docs/physics.md).
 
 Built-in presets: **DarkQuest/SpinQuest** (120 GeV), **SHiP** (400 GeV),
 **LANSCE 12-bar demonstrator** (0.8 GeV), **FLAME @ FNAL** (120 GeV, 1 km,
