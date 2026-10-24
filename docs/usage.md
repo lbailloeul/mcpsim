@@ -123,8 +123,8 @@ engine:
   quick: false             # capped statistics for smoke runs (not cached)
 
 sensitivity:               # detection D(eps) = (1-exp(-n_gamma eps^2))^a eps^2
-  n_gamma: 2.5e5           # photoelectrons at eps = 1 (GEANT4-derived) — OR:
-  scintillator: plastic    # derive n_gamma from a material anchor scaled
+  n_gamma: 2.5e5           # photoelectrons at eps = 1 (GEANT4-derived), or instead
+  # scintillator: plastic  # derive n_gamma from a material anchor scaled
                            #   linearly with detector.bar_length_m
                            #   (plastic: 2.5e5 @ 1.5 m; cebr: 5.0e6 @ 1.5 m;
                            #   table in physics/constants.SCINTILLATORS).
