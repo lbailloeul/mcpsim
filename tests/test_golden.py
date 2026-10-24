@@ -1,9 +1,13 @@
-"""Legacy-parity golden tests (opt-in: pytest -m golden; needs the source repo).
+"""Golden tests (opt-in: pytest -m golden; needs the source repo).
 
 fidelity='legacy' with untouched preset geometry must reproduce
 tests/golden/ bit-for-bit — the frozen output of the published pipeline as it
 stood before this package refactored it. Any diff here means a
 physics-affecting change leaked into the legacy path.
+
+The default fidelity must reproduce tests/golden/corrected/ bit-for-bit, the
+verified outputs collaborators get from `mcpsim run --preset <name>`. A change
+meant to move them regenerates those files with that command and says why.
 """
 
 from dataclasses import replace
@@ -13,7 +17,7 @@ import numpy as np
 import pytest
 
 from mcpsim import paths
-from mcpsim.config import load_preset
+from mcpsim.config import load_preset, run_config
 from mcpsim.model import compute_production
 from mcpsim.pipeline import write_tables
 
@@ -30,9 +34,18 @@ pytestmark = [
 def test_legacy_fidelity_reproduces_golden(preset, tmp_path):
     cfg = load_preset(preset)
     cfg = replace(cfg, engine=replace(cfg.engine, fidelity="legacy"))
-    result = compute_production(cfg)
-    write_tables(result, tmp_path)
+    _assert_reproduces(cfg, GOLDEN / cfg.tag, tmp_path)
+
+
+@pytest.mark.parametrize("preset", ["darkquest", "ship", "lanl_12bar", "flame"])
+def test_default_fidelity_reproduces_golden(preset, tmp_path):
+    cfg = run_config(load_preset(preset))
+    _assert_reproduces(cfg, GOLDEN / "corrected" / cfg.tag, tmp_path)
+
+
+def _assert_reproduces(cfg, golden_dir, tmp_path):
+    write_tables(compute_production(cfg), tmp_path)
     for kind in ("production", "limit"):
         new = np.loadtxt(tmp_path / f"{kind}_{cfg.tag}.txt")
-        gold = np.loadtxt(GOLDEN / cfg.tag / f"{kind}_{cfg.tag}.txt")
-        np.testing.assert_array_equal(new, gold, err_msg=f"{preset} {kind}")
+        gold = np.loadtxt(golden_dir / f"{kind}_{cfg.tag}.txt")
+        np.testing.assert_array_equal(new, gold, err_msg=f"{cfg.tag} {kind}")

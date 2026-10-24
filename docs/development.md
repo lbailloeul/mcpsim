@@ -54,6 +54,13 @@ and `decay._patched_vector_meson_binary`.
   before this package refactored it — they *are* the baseline reference.
   `--fidelity legacy` at preset geometry must reproduce them **bit-for-bit**:
   `pytest -m golden`.
+- `tests/golden/corrected/` holds the default-fidelity outputs of every
+  preset, and the default fidelity must reproduce them bit-for-bit too
+  (`pytest -m golden`; a first run on an empty cache computes the
+  acceptances, a few minutes). A change meant to move them regenerates them
+  with `mcpsim run --preset <name> -o <dir>`, copies `production_<tag>.txt`
+  and `limit_<tag>.txt` into `tests/golden/corrected/<tag>/`, and says why
+  in the commit.
 - Any deliberate physics change goes behind the fidelity switch, as a field
   of `config.FidelityRules` that the code reads from `cfg.engine.rules`, and
   gets its delta quantified in the fidelity table in `docs/physics.md`. A
