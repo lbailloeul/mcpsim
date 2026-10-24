@@ -67,10 +67,14 @@ and `decay._patched_vector_meson_binary`.
 ## Tests
 
 ```
-pytest                  # toolchain-free: 70+ tests, mini-repo fixture
+pytest                  # toolchain-free: 200+ tests, mini-repo fixture
 pytest -m golden        # needs the source repo
 pytest -m parity        # needs ROOT + the PYTHIA samples (~10 min)
 ```
+
+CI (`.github/workflows/tests.yml`) runs `pytest` on every push and pull
+request, on Python 3.11 and 3.13, without the data bundle; the tests that
+need it skip.
 
 The `mini_repo` fixture (`tests/conftest.py`) is a 5-mass synthetic source
 repo — extend it rather than pointing tests at the real data.
