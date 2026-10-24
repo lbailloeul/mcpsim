@@ -276,4 +276,5 @@ def cached_acceptance(cfg: Config, meson: str, grid: np.ndarray,
                 "bar_size_m": det.bar_size_m, "offaxis_mrad": det.offaxis_mrad},
                 "fidelity": cfg.engine.fidelity, "seed": cfg.engine.seed,
                 "samples_dir": str(samples.samples_dir(cfg))}, fh, indent=2)
+        return np.loadtxt(out, ndmin=2)[:, 1]     # as stored: a first run matches later ones
     return ag
