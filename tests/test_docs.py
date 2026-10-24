@@ -1,5 +1,3 @@
-"""The published docs' `mcpsim` commands and YAML configs match the CLI and the config schema."""
-
 import re
 import shlex
 from pathlib import Path
@@ -12,8 +10,9 @@ from mcpsim.cli import cli
 from mcpsim.config import load_config
 
 ROOT = Path(__file__).resolve().parent.parent
+UNPUBLISHED_DOCS = {"handoff.md"}
 DOCS = [ROOT / "README.md"] + sorted(p for p in (ROOT / "docs").glob("*.md")
-                                     if p.name != "handoff.md")     # local notes, not published
+                                     if p.name not in UNPUBLISHED_DOCS)
 BLOCKS = [(doc.name, lang, body) for doc in DOCS
           for lang, body in re.findall(r"```(\w*)\n(.*?)```", doc.read_text(), re.S)]
 COMMANDS = [(name, line) for name, lang, body in BLOCKS for raw in body.splitlines()
@@ -40,7 +39,7 @@ def test_documented_commands_parse(doc, line):
 
 @pytest.mark.parametrize("doc,body", CONFIGS, ids=[f"{d}#{i}" for i, (d, _) in enumerate(CONFIGS)])
 def test_documented_configs_load(doc, body, tmp_path, monkeypatch):
-    monkeypatch.setattr(paths, "_source_override", paths._source_override)  # a source_repo key sets it
+    monkeypatch.setattr(paths, "_source_override", None)
     path = tmp_path / "config.yaml"
     path.write_text(body)
     load_config(path)

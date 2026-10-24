@@ -2,9 +2,6 @@ name: FLAME
 # family intentionally NOT darkquest: the legacy flat upsilon acceptance
 # (0.011357) belongs to the 40 m / 0.5 m DarkQuest cylinder and would inflate
 # the upsilon channel by ~4 orders of magnitude at this 20 cm face at 1 km.
-# With an unknown family the upsilon channel is skipped. Its size at this face
-# is not established: the borrow is unreliable here and no upsilon sample
-# exists. Set data.upsilon_ageo to include it.
 family: flame
 
 # FLAME at FNAL: a milliQan-style scintillator-bar mCP detector placed 1 km

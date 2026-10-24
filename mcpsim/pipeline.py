@@ -208,7 +208,7 @@ def regenerate_inputs(cfg: Config, gen_dir: Path, mass_subset: Optional[int] = N
         acc = dict(data.acceptance)
         for name in MESONS:
             if name == "upsilon":
-                continue  # no parent sample to regenerate; it borrows the J/psi's
+                continue
             try:
                 # Preflight BEFORE the (expensive) meson generation: a
                 # 10M-trial PYTHIA run must not precede an "unsupported

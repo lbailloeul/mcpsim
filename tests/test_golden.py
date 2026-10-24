@@ -4,10 +4,6 @@ fidelity='legacy' with untouched preset geometry must reproduce
 tests/golden/ bit-for-bit — the frozen output of the published pipeline as it
 stood before this package refactored it. Any diff here means a
 physics-affecting change leaked into the legacy path.
-
-The default fidelity must reproduce tests/golden/corrected/ bit-for-bit, the
-verified outputs collaborators get from `mcpsim run --preset <name>`. A change
-meant to move them regenerates those files with that command and says why.
 """
 
 from dataclasses import replace
@@ -48,4 +44,6 @@ def _assert_reproduces(cfg, golden_dir, tmp_path):
     for kind in ("production", "limit"):
         new = np.loadtxt(tmp_path / f"{kind}_{cfg.tag}.txt")
         gold = np.loadtxt(golden_dir / f"{kind}_{cfg.tag}.txt")
-        np.testing.assert_array_equal(new, gold, err_msg=f"{cfg.tag} {kind}")
+        np.testing.assert_array_equal(
+            new, gold, err_msg=f"{cfg.tag} {kind} differs from {golden_dir} "
+                               f"(docs/development.md, Parity discipline)")

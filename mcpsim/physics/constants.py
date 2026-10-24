@@ -188,8 +188,5 @@ TARGET_MATERIALS: Dict[str, TargetMaterial] = {
 # What stays unvalidated: the J/psi acceptance is not flat in mass, and its scan
 # stops at m_chi = 1.525 GeV (the J/psi's own kinematic edge) while upsilon
 # decays stay open to m_chi = 4.73 GeV, so past roughly the first third of the
-# upsilon's range the borrowed value covers territory no scan has reached. Above
-# the J/psi's edge the upsilon is the only meson channel, and it moves the
-# DarkQuest limit by up to 6x and SHiP's by up to 16% between 1.6 and 4.7 GeV
-# (docs/physics.md), so that range rests on the borrowed value.
+# upsilon's range the borrowed value covers territory no scan has reached.
 UPSILON_FAMILIES = frozenset({"darkquest", "ship"})

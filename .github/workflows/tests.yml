@@ -14,5 +14,4 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      # No data bundle on the runner: the tests that need it skip.
       - run: pytest -q
