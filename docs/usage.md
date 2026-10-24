@@ -202,8 +202,8 @@ mcpsim run --preset flame --quick
 # Fresh acceptance via the legacy C++ (needs ROOT, and PYTHIA for the parent
 # mesons). It covers Dalitz parents on a bar face and 2-body parents on a
 # disc, so at DarkQuest's default bar face only pi0 and eta regenerate and the
-# 2-body mesons are skipped with a message; --fidelity legacy (the paper's
-# disc) regenerates those instead:
+# 2-body mesons are skipped with a message. With --fidelity legacy (the
+# paper's disc) those regenerate instead:
 mcpsim generate mesons --preset darkquest --engine cpp --mass-subset 3
 
 # Brem grid on LXPLUS:

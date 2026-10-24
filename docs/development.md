@@ -55,12 +55,12 @@ and `decay._patched_vector_meson_binary`.
   `--fidelity legacy` at preset geometry must reproduce them **bit-for-bit**:
   `pytest -m golden`.
 - `tests/golden/corrected/` holds the default-fidelity outputs of every
-  preset, and the default fidelity must reproduce them bit-for-bit too
-  (`pytest -m golden`; a first run on an empty cache computes the
-  acceptances, a few minutes). A change meant to move them regenerates them
-  with `mcpsim run --preset <name> -o <dir>`, copies `production_<tag>.txt`
-  and `limit_<tag>.txt` into `tests/golden/corrected/<tag>/`, and says why
-  in the commit.
+  preset, and the default fidelity must reproduce them bit-for-bit too,
+  under `pytest -m golden`. On an empty cache the first such run computes
+  the acceptances, which takes a few minutes. A change meant to move them
+  regenerates them with `mcpsim run --preset <name> -o <dir>`, copies
+  `production_<tag>.txt` and `limit_<tag>.txt` into
+  `tests/golden/corrected/<tag>/`, and says why in the commit.
 - Any deliberate physics change goes behind the fidelity switch, as a field
   of `config.FidelityRules` that the code reads from `cfg.engine.rules`, and
   gets its delta quantified in the fidelity table in `docs/physics.md`. A
@@ -80,8 +80,8 @@ pytest -m parity        # needs ROOT + the PYTHIA samples (~10 min)
 ```
 
 CI (`.github/workflows/tests.yml`) runs `pytest` on every push and pull
-request, on Python 3.11 and 3.13, without the data bundle; the tests that
-need it skip.
+request, on Python 3.11 and 3.13, without the data bundle. The tests that
+need the bundle skip.
 
 The `mini_repo` fixture (`tests/conftest.py`) is a 5-mass synthetic source
 repo — extend it rather than pointing tests at the real data.
