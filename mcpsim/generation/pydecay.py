@@ -255,18 +255,16 @@ def geometry_hash(cfg: Config, meson: str, grid: np.ndarray) -> str:
 def cached_acceptance(cfg: Config, meson: str, grid: np.ndarray,
                       cache_dir: Path) -> np.ndarray:
     """acceptance_on_grid with an on-disk cache + JSON provenance sidecar."""
+    if cfg.engine.quick:
+        return acceptance_on_grid(cfg, meson, grid)
     key = geometry_hash(cfg, meson, grid)
     sub = cache_dir / key
     out = sub / f"ageo_{meson}.txt"
-    if out.exists() and not cfg.engine.quick:
-        arr = np.loadtxt(out)
-        if arr.shape[0] == grid.size:
-            return arr[:, 1]
-    sub.mkdir(parents=True, exist_ok=True)
-    ag = acceptance_on_grid(cfg, meson, grid)
-    if not cfg.engine.quick:
-        np.savetxt(out, np.column_stack([grid, ag]), fmt="%.8g",
-                   header=f"mass_GeV ageo(per-chi hit prob) [pydecay {key}]")
+    cached = np.loadtxt(out, ndmin=2) if out.exists() else None
+    if cached is None or cached.shape[0] != grid.size:
+        sub.mkdir(parents=True, exist_ok=True)
+        np.savetxt(out, np.column_stack([grid, acceptance_on_grid(cfg, meson, grid)]),
+                   fmt="%.8g", header=f"mass_GeV ageo(per-chi hit prob) [pydecay {key}]")
         det = cfg.detector
         with open(sub / f"ageo_{meson}.json", "w") as fh:
             json.dump({"meson": meson, "detector": {
@@ -276,5 +274,5 @@ def cached_acceptance(cfg: Config, meson: str, grid: np.ndarray,
                 "bar_size_m": det.bar_size_m, "offaxis_mrad": det.offaxis_mrad},
                 "fidelity": cfg.engine.fidelity, "seed": cfg.engine.seed,
                 "samples_dir": str(samples.samples_dir(cfg))}, fh, indent=2)
-        return np.loadtxt(out, ndmin=2)[:, 1]     # as stored: a first run matches later ones
-    return ag
+        cached = np.loadtxt(out, ndmin=2)
+    return cached[:, 1]
