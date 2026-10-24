@@ -372,7 +372,8 @@ def prepare_condor_dy(cfg: Config, masses: np.ndarray, work_dir: Path, *,
     dy_cross, dy_ageo = _scan_paths(cfg, work_dir)
     (work_dir / "README_condor.txt").write_text(_DY_CONDOR_README.format(
         n_masses=masses.size, name=cfg.name, energy=cfg.beam.energy_gev, nevents=nevents,
-        pdf_set=DY_PDF_SET, lhaid=DY_PDF_LHAID, lcg_view=condor.LCG_VIEWS[0],
+        pdf_set=DY_PDF_SET, lhaid=DY_PDF_LHAID, dy_material=DY_PDF_MATERIAL,
+        lcg_view=condor.LCG_VIEWS[0],
         workdir=work_dir, dy_cross=dy_cross, dy_ageo=dy_ageo,
         mg5_line=(f"The jobs use MG5_DIR = {mg5_dir}\n   (the one on PATH when "
                   f"this bundle was written), else mg5_aMC on PATH." if mg5_dir else
@@ -577,7 +578,7 @@ the defaults at the top of run_dy_job.sh, or in dy.sub as
      data:
        dy_cross: {dy_cross}
        dy_ageo: {dy_ageo}
-       dy_material: iron
+       dy_material: {dy_material}
 """
 
 
