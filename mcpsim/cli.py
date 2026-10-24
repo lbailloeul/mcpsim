@@ -231,7 +231,7 @@ def _doctor_report() -> None:
 
     click.echo("\nPython modules:")
     for mod in ("numpy", "scipy", "matplotlib", "yaml", "click", "uproot",
-                "mpi4py", "vegas", "pythia8"):
+                "mpi4py", "vegas", "pythia8", "parton"):
         ok = __import__("importlib.util", fromlist=["util"]).find_spec(mod) is not None
         click.secho(f"  {'OK ' if ok else 'NO '} {mod}", fg="green" if ok else "yellow")
 
@@ -254,6 +254,22 @@ def _doctor_report() -> None:
     else:
         click.secho(f"  {'NO  set but missing: %s' % model if model else '-   unset'}"
                     "  — only needed for `mcpsim generate dy`.", fg="yellow")
+
+    from .generation import dy_tables
+    from .physics.constants import TARGET_MATERIALS
+    pdfdir = os.environ.get("MCPSIM_PDFSETS")
+    click.echo("\nDrell-Yan acceptance of a custom or off-axis detector "
+               "(needs parton and MCPSIM_PDFSETS):")
+    if not pdfdir:
+        click.secho("  -   MCPSIM_PDFSETS unset  — such a detector gets no Drell-Yan; "
+                    "see docs/install.md.", fg="yellow")
+    for name, mat in TARGET_MATERIALS.items() if pdfdir else ():
+        sets = [dy_tables.BEAM_PDF_SET] + [
+            s for s, _ in dy_tables.bound_proton_weights(dy_tables.mass_number(mat))]
+        missing = [s for s in sets if not (Path(pdfdir) / s).is_dir()]
+        click.secho(f"  {'NO ' if missing else 'OK '} {name}: "
+                    + (f"missing {', '.join(missing)} in {pdfdir}" if missing else ", ".join(sets)),
+                    fg="yellow" if missing else "green")
 
     click.echo("\nExternal toolchains (not pip-installable):")
     _report_external_tool("root-config", "ROOT — needed to compile the C++ generators/decay.")

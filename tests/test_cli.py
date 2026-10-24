@@ -187,6 +187,18 @@ def test_doctor_runs_without_data(runner, monkeypatch):
     assert "External toolchains" in r.output and "zenodo" in r.output
 
 
+def test_doctor_names_the_pdf_sets_each_target_needs(runner, monkeypatch, tmp_path):
+    for s in ("nCTEQ15_1_1", "nCTEQ15_12_6"):
+        (tmp_path / s).mkdir()
+    monkeypatch.setenv("MCPSIM_PDFSETS", str(tmp_path))
+    r = runner.invoke(cli, ["doctor"])
+    assert r.exit_code == 0
+    assert "OK  carbon: nCTEQ15_1_1, nCTEQ15_12_6" in r.output
+    assert "NO  iron: missing nCTEQ15_56_26" in r.output
+    monkeypatch.delenv("MCPSIM_PDFSETS")
+    assert "MCPSIM_PDFSETS unset" in runner.invoke(cli, ["doctor"]).output
+
+
 def test_target_swap_by_keyword(runner, mini_repo, tmp_path):
     cfg = tmp_path / "mini.yaml"
     cfg.write_text("name: mini\nbeam: {energy_gev: 120.0}\nchannels: [mesons]\n"

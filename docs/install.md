@@ -99,7 +99,10 @@ a scan of your conda envs for ones that carry them.
 - **Drell-Yan acceptance for custom or off-axis detectors** (e.g. FLAME):
   `pip install parton` and set `MCPSIM_PDFSETS` to a directory holding the
   nCTEQ15 LHAPDF grids (nCTEQ15_1_1 plus the target's set, e.g. nCTEQ15_12_6
-  for carbon); on LXPLUS `$(lhapdf-config --datadir)` in an LCG view. The
+  for carbon). `mcpsim doctor` lists the sets each target needs and which are
+  missing. Each set downloads with
+  `curl -sSfL https://lhapdfsets.web.cern.ch/current/<set>.tar.gz | tar xz`
+  into that directory. Without them such a detector gets no Drell-Yan. The
   acceptance is computed once per detector and cached.
 
 ## Troubleshooting
